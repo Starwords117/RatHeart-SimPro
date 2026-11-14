@@ -28,8 +28,10 @@ ASSETS=(
 BODY=$(python3 -c "import json;print(json.dumps(open('release/RELEASE_NOTES_v0.1.1.md',encoding='utf-8').read()))")
 
 echo "==> 已存在的 Release 检查(tag: ${TAG})"
-RELEASE_ID=$(curl -sf -H "Authorization: Bearer ${GH_TOKEN}" "${API}/releases/tags/${TAG}" \
-  | python3 -c "import json,sys;print(json.load(sys.stdin).get('id',''))" || true)
+RELEASE_ID=$(curl -s -H "Authorization: Bearer ${GH_TOKEN}" "${API}/releases/tags/${TAG}" \
+  | python3 -c "import json,sys
+try: print(json.load(sys.stdin).get('id',''))
+except Exception: print('')" || true)
 if [ -n "${RELEASE_ID}" ]; then
   echo "    Release 已存在(id=${RELEASE_ID}),跳过创建,直接补传资产"
 else
