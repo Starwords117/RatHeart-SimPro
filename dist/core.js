@@ -3,7 +3,7 @@ const DT = 125e-6;
 const STEPS_PER_POINT = 100;
 const POINT_DT = DT * STEPS_PER_POINT;
 const RECEPTOR_DT = 5e-3;
-const MODEL_VERSION = "ratcvs-3.3.7-web-0.1";
+const MODEL_VERSION = "ratheart-simpro-0.1.1";
 const DEFAULT_SPEED = 0.25;
 const DEFAULT_WINDOW_POINTS = 4e3;
 const SAMPLE_DT = POINT_DT / 2;
@@ -352,7 +352,7 @@ class Experiment {
   // ------------------------------------------------------------------
   exportSnapshot() {
     return JSON.parse(JSON.stringify({
-      format: "ratcvs-web",
+      format: "ratheart-simpro",
       version: 1,
       modelVersion: MODEL_VERSION,
       savedAt: (/* @__PURE__ */ new Date()).toISOString(),
@@ -363,7 +363,7 @@ class Experiment {
   }
   restore(snapshot) {
     const data = JSON.parse(JSON.stringify(snapshot));
-    if (data.format !== "ratcvs-web" || data.version !== 1) throw new Error("format mismatch");
+    if (data.format !== "ratheart-simpro" || data.version !== 1) throw new Error("format mismatch");
     this.state = data.state;
     this.state.running = false;
     if (typeof this.state.receptorNext !== "number") this.state.receptorNext = this.state.time;

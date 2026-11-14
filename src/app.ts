@@ -529,7 +529,7 @@ $<HTMLInputElement>('#file-input').addEventListener('change', async (event) => {
   if (file.name.toLowerCase().endsWith('.json')) {
     try {
       const snapshot = JSON.parse(await file.text());
-      if (snapshot.format !== 'ratcvs-web' || snapshot.version !== 1) throw new Error('format');
+      if (snapshot.format !== 'ratheart-simpro' || snapshot.version !== 1) throw new Error('format');
       send('restore', { snapshot });
     } catch { toast('实验文件格式不正确。'); }
   } else {
@@ -610,21 +610,12 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden' && state && state.points > 0) send('snapshot', { purpose: 'autosave' });
 });
 
-// 改名迁移：旧版（RatCVS Web）的自动保存键移到新键名下，保住已有实验数据
-(function migrateAutosaveKey(): void {
-  const legacy = localStorage.getItem('ratcvs-web-session-v1');
-  if (legacy && !localStorage.getItem('ratheart-simpro-session-v1')) {
-    try { localStorage.setItem('ratheart-simpro-session-v1', legacy); } catch { /* 容量不足时忽略 */ }
-  }
-  localStorage.removeItem('ratcvs-web-session-v1');
-})();
-
 (function restoreAutosave(): void {
   const saved = localStorage.getItem('ratheart-simpro-session-v1');
   if (!saved) return;
   try {
     const snapshot = JSON.parse(saved);
-    if (snapshot.format !== 'ratcvs-web' || snapshot.version !== 1) return;
+    if (snapshot.format !== 'ratheart-simpro' || snapshot.version !== 1) return;
     send('restore', { snapshot });
     toast(snapshot.state?.recorderStarted
       ? '已恢复上次自动保存的实验（记录已开始：动物模型已锁定，点击「新建实验」可重新开始）。'

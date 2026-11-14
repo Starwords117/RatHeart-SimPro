@@ -12,7 +12,7 @@ export const DT = 0.000125;                 // 原版 t.Step
 export const STEPS_PER_POINT = 100;         // 原版 NumStepsPerDisplayPoint
 export const POINT_DT = DT * STEPS_PER_POINT;
 export const RECEPTOR_DT = 0.005;           // 原版 t.next 步进
-export const MODEL_VERSION = 'ratcvs-3.3.7-web-0.1';
+export const MODEL_VERSION = 'ratheart-simpro-0.1.1'; // 模型移植自 RatCVS 3.3.7 (30.07.20)
 /** 原版默认回放速度：TTimer.Interval=50ms → 20 显示点/s，
  *  每点 12.5 ms 生理时间 → 0.25 生理秒/实际秒。 */
 export const DEFAULT_SPEED = 0.25;
@@ -91,7 +91,7 @@ export interface SessionState {
 }
 
 export interface Snapshot {
-  format: 'ratcvs-web';
+  format: 'ratheart-simpro';
   version: 1;
   modelVersion: string;
   savedAt: string;
@@ -485,14 +485,14 @@ export class Experiment {
   // ------------------------------------------------------------------
   exportSnapshot(): Snapshot {
     return JSON.parse(JSON.stringify({
-      format: 'ratcvs-web', version: 1 as const, modelVersion: MODEL_VERSION,
+      format: 'ratheart-simpro', version: 1 as const, modelVersion: MODEL_VERSION,
       savedAt: new Date().toISOString(), state: this.state, trace: this.trace, events: this.events
     }));
   }
 
   restore(snapshot: Snapshot): void {
     const data = JSON.parse(JSON.stringify(snapshot));
-    if (data.format !== 'ratcvs-web' || data.version !== 1) throw new Error('format mismatch');
+    if (data.format !== 'ratheart-simpro' || data.version !== 1) throw new Error('format mismatch');
     this.state = data.state;
     this.state.running = false;
     if (typeof this.state.receptorNext !== 'number') this.state.receptorNext = this.state.time;

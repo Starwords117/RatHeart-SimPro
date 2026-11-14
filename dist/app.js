@@ -504,7 +504,7 @@ $("#file-input").addEventListener("change", async (event) => {
   if (file.name.toLowerCase().endsWith(".json")) {
     try {
       const snapshot = JSON.parse(await file.text());
-      if (snapshot.format !== "ratcvs-web" || snapshot.version !== 1) throw new Error("format");
+      if (snapshot.format !== "ratheart-simpro" || snapshot.version !== 1) throw new Error("format");
       send("restore", { snapshot });
     } catch {
       toast("\u5B9E\u9A8C\u6587\u4EF6\u683C\u5F0F\u4E0D\u6B63\u786E\u3002");
@@ -582,22 +582,12 @@ setInterval(() => {
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden" && state && state.points > 0) send("snapshot", { purpose: "autosave" });
 });
-(function migrateAutosaveKey() {
-  const legacy = localStorage.getItem("ratcvs-web-session-v1");
-  if (legacy && !localStorage.getItem("ratheart-simpro-session-v1")) {
-    try {
-      localStorage.setItem("ratheart-simpro-session-v1", legacy);
-    } catch {
-    }
-  }
-  localStorage.removeItem("ratcvs-web-session-v1");
-})();
 (function restoreAutosave() {
   const saved = localStorage.getItem("ratheart-simpro-session-v1");
   if (!saved) return;
   try {
     const snapshot = JSON.parse(saved);
-    if (snapshot.format !== "ratcvs-web" || snapshot.version !== 1) return;
+    if (snapshot.format !== "ratheart-simpro" || snapshot.version !== 1) return;
     send("restore", { snapshot });
     toast(snapshot.state?.recorderStarted ? "\u5DF2\u6062\u590D\u4E0A\u6B21\u81EA\u52A8\u4FDD\u5B58\u7684\u5B9E\u9A8C\uFF08\u8BB0\u5F55\u5DF2\u5F00\u59CB\uFF1A\u52A8\u7269\u6A21\u578B\u5DF2\u9501\u5B9A\uFF0C\u70B9\u51FB\u300C\u65B0\u5EFA\u5B9E\u9A8C\u300D\u53EF\u91CD\u65B0\u5F00\u59CB\uFF09\u3002" : "\u5DF2\u6062\u590D\u4E0A\u6B21\u81EA\u52A8\u4FDD\u5B58\u7684\u5B9E\u9A8C\u3002");
   } catch {
