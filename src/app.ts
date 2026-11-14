@@ -112,7 +112,12 @@ function renderState(): void {
   const runLabel = $('#run-label');
   runLabel.textContent = s.running ? '暂停记录' : s.historyOnly ? '历史记录（只读）' : '开始记录';
   const modelRow = $('#model-radios');
-  modelRow.classList.toggle('disabled', s.recorderStarted || s.historyOnly);
+  const modelLocked = s.recorderStarted || s.historyOnly;
+  modelRow.classList.toggle('disabled', modelLocked);
+  modelRow.title = modelLocked ? '动物模型已锁定：点击「新建实验」后可重新选择' : '开始记录后模型不可切换；点击「新建实验」后可重新选择';
+  $('#model-note').textContent = modelLocked
+    ? '动物模型已锁定（记录开始后不可切换，与原版一致）。点击「新建实验」开始新实验后可重新选择模型。'
+    : '去脑大鼠无中枢神经反射，是标准药理筛选制备；正常大鼠保留压力感受器反馈与基础交感张力。开始记录后不可切换。';
   $<HTMLInputElement>('#radio-pithed').checked = s.pithed;
   $<HTMLInputElement>('#radio-normal').checked = !s.pithed;
   const latest = events.at(-1);
@@ -460,7 +465,16 @@ $('#stimulate-button').addEventListener('click', () => {
 
 for (const radio of document.querySelectorAll<HTMLInputElement>('input[name="rat-model"]')) {
   radio.addEventListener('change', () => {
-    send('model', { value: radio.value === 'normal' });
+    // 锁定态下不再静默吞掉点击：给出解释并立即回弹选中态
+    if (state && (state.recorderStarted || state.historyOnly)) {
+      toast(state.historyOnly
+        ? '导入的历史记录只读；点击「新建实验」后可重新选择动物模型。'
+        : '动物模型已锁定：记录开始后不可切换（与原版一致）。点击「新建实验」开始新实验后可重新选择。');
+      renderState();
+      return;
+    }
+    // setPithed 期望「是否去脑大鼠」；radio 的 value='pithed' 对应 true
+    send('model', { value: radio.value === 'pithed' });
   });
 }
 
@@ -603,7 +617,9 @@ document.addEventListener('visibilitychange', () => {
     const snapshot = JSON.parse(saved);
     if (snapshot.format !== 'ratcvs-web' || snapshot.version !== 1) return;
     send('restore', { snapshot });
-    toast('已恢复上次自动保存的实验。');
+    toast(snapshot.state?.recorderStarted
+      ? '已恢复上次自动保存的实验（记录已开始：动物模型已锁定，点击「新建实验」可重新开始）。'
+      : '已恢复上次自动保存的实验。');
   } catch { /* 忽略损坏的自动保存 */ }
 })();
 

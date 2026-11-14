@@ -92,7 +92,10 @@ function renderState() {
   const runLabel = $("#run-label");
   runLabel.textContent = s.running ? "\u6682\u505C\u8BB0\u5F55" : s.historyOnly ? "\u5386\u53F2\u8BB0\u5F55\uFF08\u53EA\u8BFB\uFF09" : "\u5F00\u59CB\u8BB0\u5F55";
   const modelRow = $("#model-radios");
-  modelRow.classList.toggle("disabled", s.recorderStarted || s.historyOnly);
+  const modelLocked = s.recorderStarted || s.historyOnly;
+  modelRow.classList.toggle("disabled", modelLocked);
+  modelRow.title = modelLocked ? "\u52A8\u7269\u6A21\u578B\u5DF2\u9501\u5B9A\uFF1A\u70B9\u51FB\u300C\u65B0\u5EFA\u5B9E\u9A8C\u300D\u540E\u53EF\u91CD\u65B0\u9009\u62E9" : "\u5F00\u59CB\u8BB0\u5F55\u540E\u6A21\u578B\u4E0D\u53EF\u5207\u6362\uFF1B\u70B9\u51FB\u300C\u65B0\u5EFA\u5B9E\u9A8C\u300D\u540E\u53EF\u91CD\u65B0\u9009\u62E9";
+  $("#model-note").textContent = modelLocked ? "\u52A8\u7269\u6A21\u578B\u5DF2\u9501\u5B9A\uFF08\u8BB0\u5F55\u5F00\u59CB\u540E\u4E0D\u53EF\u5207\u6362\uFF0C\u4E0E\u539F\u7248\u4E00\u81F4\uFF09\u3002\u70B9\u51FB\u300C\u65B0\u5EFA\u5B9E\u9A8C\u300D\u5F00\u59CB\u65B0\u5B9E\u9A8C\u540E\u53EF\u91CD\u65B0\u9009\u62E9\u6A21\u578B\u3002" : "\u53BB\u8111\u5927\u9F20\u65E0\u4E2D\u67A2\u795E\u7ECF\u53CD\u5C04\uFF0C\u662F\u6807\u51C6\u836F\u7406\u7B5B\u9009\u5236\u5907\uFF1B\u6B63\u5E38\u5927\u9F20\u4FDD\u7559\u538B\u529B\u611F\u53D7\u5668\u53CD\u9988\u4E0E\u57FA\u7840\u4EA4\u611F\u5F20\u529B\u3002\u5F00\u59CB\u8BB0\u5F55\u540E\u4E0D\u53EF\u5207\u6362\u3002";
   $("#radio-pithed").checked = s.pithed;
   $("#radio-normal").checked = !s.pithed;
   const latest = events.at(-1);
@@ -442,7 +445,12 @@ $("#stimulate-button").addEventListener("click", () => {
 });
 for (const radio of document.querySelectorAll('input[name="rat-model"]')) {
   radio.addEventListener("change", () => {
-    send("model", { value: radio.value === "normal" });
+    if (state && (state.recorderStarted || state.historyOnly)) {
+      toast(state.historyOnly ? "\u5BFC\u5165\u7684\u5386\u53F2\u8BB0\u5F55\u53EA\u8BFB\uFF1B\u70B9\u51FB\u300C\u65B0\u5EFA\u5B9E\u9A8C\u300D\u540E\u53EF\u91CD\u65B0\u9009\u62E9\u52A8\u7269\u6A21\u578B\u3002" : "\u52A8\u7269\u6A21\u578B\u5DF2\u9501\u5B9A\uFF1A\u8BB0\u5F55\u5F00\u59CB\u540E\u4E0D\u53EF\u5207\u6362\uFF08\u4E0E\u539F\u7248\u4E00\u81F4\uFF09\u3002\u70B9\u51FB\u300C\u65B0\u5EFA\u5B9E\u9A8C\u300D\u5F00\u59CB\u65B0\u5B9E\u9A8C\u540E\u53EF\u91CD\u65B0\u9009\u62E9\u3002");
+      renderState();
+      return;
+    }
+    send("model", { value: radio.value === "pithed" });
   });
 }
 $("#new-experiment-button").addEventListener("click", () => {
@@ -581,7 +589,7 @@ document.addEventListener("visibilitychange", () => {
     const snapshot = JSON.parse(saved);
     if (snapshot.format !== "ratcvs-web" || snapshot.version !== 1) return;
     send("restore", { snapshot });
-    toast("\u5DF2\u6062\u590D\u4E0A\u6B21\u81EA\u52A8\u4FDD\u5B58\u7684\u5B9E\u9A8C\u3002");
+    toast(snapshot.state?.recorderStarted ? "\u5DF2\u6062\u590D\u4E0A\u6B21\u81EA\u52A8\u4FDD\u5B58\u7684\u5B9E\u9A8C\uFF08\u8BB0\u5F55\u5DF2\u5F00\u59CB\uFF1A\u52A8\u7269\u6A21\u578B\u5DF2\u9501\u5B9A\uFF0C\u70B9\u51FB\u300C\u65B0\u5EFA\u5B9E\u9A8C\u300D\u53EF\u91CD\u65B0\u5F00\u59CB\uFF09\u3002" : "\u5DF2\u6062\u590D\u4E0A\u6B21\u81EA\u52A8\u4FDD\u5B58\u7684\u5B9E\u9A8C\u3002");
   } catch {
   }
 })();

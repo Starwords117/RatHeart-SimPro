@@ -36,11 +36,11 @@
         <section class="card">
           <div class="card-title"><h2>动物模型</h2></div>
           <button id="new-experiment-button" class="button secondary full" type="button">新建实验</button>
-          <div class="radio-row" id="model-radios">
+          <div class="radio-row" id="model-radios" title="开始记录后模型不可切换；点击「新建实验」后可重新选择">
             <label><input type="radio" name="rat-model" id="radio-pithed" value="pithed" checked> 去脑大鼠</label>
             <label><input type="radio" name="rat-model" id="radio-normal" value="normal"> 正常大鼠</label>
           </div>
-          <p class="micro-note">去脑大鼠无中枢神经反射，是标准药理筛选制备；正常大鼠保留压力感受器反馈与基础交感张力。开始记录后不可切换。</p>
+          <p class="micro-note" id="model-note">去脑大鼠无中枢神经反射，是标准药理筛选制备；正常大鼠保留压力感受器反馈与基础交感张力。开始记录后不可切换。</p>
         </section>
 
         <section class="card drug-card">
