@@ -45,7 +45,7 @@ function download(blob, name) {
 }
 function filename(ext) {
   const stamp = (/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace(/:/g, "-");
-  return `RatCVS_${stamp}.${ext}`;
+  return `RatHeart-SimPro_${stamp}.${ext}`;
 }
 function time(value, decimals = false) {
   const m = Math.floor(value / 60);
@@ -379,7 +379,7 @@ worker.onmessage = (event) => {
       if (m.purpose === "autosave") {
         const trimmed = { ...snapshot, trace: snapshot.trace.slice(-96e3).map(roundFrame) };
         try {
-          localStorage.setItem("ratcvs-web-session-v1", JSON.stringify(trimmed));
+          localStorage.setItem("ratheart-simpro-session-v1", JSON.stringify(trimmed));
         } catch {
         }
       } else {
@@ -582,8 +582,18 @@ setInterval(() => {
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden" && state && state.points > 0) send("snapshot", { purpose: "autosave" });
 });
+(function migrateAutosaveKey() {
+  const legacy = localStorage.getItem("ratcvs-web-session-v1");
+  if (legacy && !localStorage.getItem("ratheart-simpro-session-v1")) {
+    try {
+      localStorage.setItem("ratheart-simpro-session-v1", legacy);
+    } catch {
+    }
+  }
+  localStorage.removeItem("ratcvs-web-session-v1");
+})();
 (function restoreAutosave() {
-  const saved = localStorage.getItem("ratcvs-web-session-v1");
+  const saved = localStorage.getItem("ratheart-simpro-session-v1");
   if (!saved) return;
   try {
     const snapshot = JSON.parse(saved);

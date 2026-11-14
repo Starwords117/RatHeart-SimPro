@@ -33,4 +33,4 @@ for (const name of await readdir('src')) {
     await cp(path.join('src', 'icons'), path.join('dist', 'icons'), { recursive: true });
   }
 }
-console.log('RatCVS Web built → dist/');
+console.log('RatHeart-SimPro Web built → dist/');

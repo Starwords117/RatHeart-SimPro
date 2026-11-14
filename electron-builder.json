@@ -1,6 +1,6 @@
 {
-  "appId": "org.ratcvslab.teaching",
-  "productName": "RatCVSLab",
+  "appId": "org.ratheartsimpro.teaching",
+  "productName": "RatHeart-SimPro",
   "directories": {
     "output": "release"
   },
@@ -31,7 +31,7 @@
         ]
       }
     ],
-    "executableName": "RatCVSLab"
+    "executableName": "RatHeart-SimPro"
   },
   "linux": {
     "target": [
@@ -49,7 +49,7 @@
       }
     ],
     "category": "Education",
-    "executableName": "ratcvslab"
+    "executableName": "ratheart-simpro"
   },
   "mac": {
     "target": [
@@ -65,10 +65,10 @@
     "identity": null
   },
   "portable": {
-    "artifactName": "RatCVSLab-${version}-${arch}-Portable.exe"
+    "artifactName": "RatHeart-SimPro-${version}-${arch}-Portable.exe"
   },
   "nsis": {
-    "artifactName": "RatCVSLab-${version}-${arch}-Setup.exe",
+    "artifactName": "RatHeart-SimPro-${version}-${arch}-Setup.exe",
     "oneClick": false,
     "perMachine": false,
     "allowToChangeInstallationDirectory": true,
@@ -82,15 +82,15 @@
     "language": "2052"
   },
   "appImage": {
-    "artifactName": "RatCVSLab-${version}-${arch}-AppImage"
+    "artifactName": "RatHeart-SimPro-${version}-${arch}-AppImage"
   },
   "deb": {
-    "artifactName": "ratcvslab_${version}_${arch}.deb",
+    "artifactName": "ratheart-simpro_${version}_${arch}.deb",
     "packageCategory": "education",
     "maintainer": "Pharmacology Teaching Group <ratcvs@example.edu>"
   },
   "dmg": {
-    "artifactName": "RatCVSLab-${version}-${arch}.dmg",
+    "artifactName": "RatHeart-SimPro-${version}-${arch}.dmg",
     "title": "RatCVS 中文大鼠心血管实验台"
   }
 }

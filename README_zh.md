@@ -1,4 +1,4 @@
-# RatCVS 中文大鼠心血管实验台 · Web 0.1
+# RatHeart-SimPro · 大鼠心血管实验台（Web 0.1）
 
 用 TypeScript 重构 RatCVS 3.3.7 的大鼠心血管系统仿真，并建立中文 Web 操作界面。
 计算在 Web Worker 中推进，界面绘制 ABP / LVP / VBP / HF / HR 五通道图纸记录仪曲线。
@@ -23,9 +23,9 @@
 
 | 平台 | 安装包 | 产物 |
 | --- | --- | --- |
-| Windows | portable 免安装 / NSIS 中文安装版 | `RatCVSLab-*-Portable.exe` / `RatCVSLab-*-Setup.exe` |
-| Linux | AppImage / deb | `RatCVSLab-*-AppImage` / `ratcvslab_*_amd64.deb` |
-| macOS | zip（Intel + Apple Silicon，解压即用；dmg 需在 macOS 上构建） | `RatCVSLab-*-mac.zip` |
+| Windows | portable 免安装 / NSIS 中文安装版 | `RatHeart-SimPro-*-Portable.exe` / `RatHeart-SimPro-*-Setup.exe` |
+| Linux | AppImage / deb | `RatHeart-SimPro-*-AppImage` / `ratheart-simpro_*_amd64.deb` |
+| macOS | zip（Intel + Apple Silicon，解压即用；dmg 需在 macOS 上构建） | `RatHeart-SimPro-*-mac.zip` |
 
 安装后双击即用（无需 Node.js）。实验文件：`保存完整实验`（JSON，含全部状态与
 波形）、`导出波形数据`（CSV）、`导出当前曲线`（PNG）、`导出原版记录文件`

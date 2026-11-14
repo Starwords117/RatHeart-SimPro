@@ -1,5 +1,5 @@
 {
-  "name": "RatCVS 中文大鼠心血管实验台",
+  "name": "RatHeart-SimPro 中文大鼠心血管实验台",
   "short_name": "心血管实验台",
   "description": "在体大鼠心血管药理实验模拟：静脉注射药物或刺激自主神经，记录动脉血压与心率变化。",
   "lang": "zh-CN",

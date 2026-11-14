@@ -2,17 +2,17 @@ const { app, BrowserWindow, dialog, Menu, net, protocol } = require('electron');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
-const APP_URL = 'ratcvs://lab/index.html';
+const APP_URL = 'ratheart://lab/index.html';
 const assets = path.resolve(__dirname, '..', 'dist');
 
-app.setName('RatCVSLab');
-app.setPath('userData', path.join(app.getPath('appData'), 'RatCVSLab'));
-app.setAppUserModelId('org.ratcvslab.teaching');
+app.setName('RatHeart-SimPro');
+app.setPath('userData', path.join(app.getPath('appData'), 'RatHeart-SimPro'));
+app.setAppUserModelId('org.ratheartsimpro.teaching');
 
 // A stable local origin supports ES modules, module Workers and localStorage.
 protocol.registerSchemesAsPrivileged([
   {
-    scheme: 'ratcvs',
+    scheme: 'ratheart',
     privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true }
   }
 ]);
@@ -54,7 +54,7 @@ function createWindow() {
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', (event, target) => {
     const url = new URL(target);
-    if (url.protocol !== 'ratcvs:' || url.hostname !== 'lab') event.preventDefault();
+    if (url.protocol !== 'ratheart:' || url.hostname !== 'lab') event.preventDefault();
   });
   window.once('ready-to-show', () => window.show());
   window.loadURL(APP_URL).catch(error => {
@@ -65,7 +65,7 @@ function createWindow() {
 
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
-  protocol.handle('ratcvs', serveAsset);
+  protocol.handle('ratheart', serveAsset);
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

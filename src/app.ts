@@ -56,7 +56,7 @@ function download(blob: Blob, name: string): void {
 
 function filename(ext: string): string {
   const stamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-  return `RatCVS_${stamp}.${ext}`;
+  return `RatHeart-SimPro_${stamp}.${ext}`;
 }
 
 function time(value: number, decimals = false): string {
@@ -390,7 +390,7 @@ worker.onmessage = (event: MessageEvent) => {
       if (m.purpose === 'autosave') {
         // 自动保存：截取最近 96000 子样本（≈10 分钟）并降精度，控制 localStorage 体积
         const trimmed = { ...snapshot, trace: snapshot.trace.slice(-96000).map(roundFrame) };
-        try { localStorage.setItem('ratcvs-web-session-v1', JSON.stringify(trimmed)); } catch { /* 容量不足时忽略 */ }
+        try { localStorage.setItem('ratheart-simpro-session-v1', JSON.stringify(trimmed)); } catch { /* 容量不足时忽略 */ }
       } else {
         download(new Blob([JSON.stringify(snapshot, null, 1)], { type: 'application/json' }), filename('json'));
       }
@@ -610,8 +610,17 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden' && state && state.points > 0) send('snapshot', { purpose: 'autosave' });
 });
 
+// 改名迁移：旧版（RatCVS Web）的自动保存键移到新键名下，保住已有实验数据
+(function migrateAutosaveKey(): void {
+  const legacy = localStorage.getItem('ratcvs-web-session-v1');
+  if (legacy && !localStorage.getItem('ratheart-simpro-session-v1')) {
+    try { localStorage.setItem('ratheart-simpro-session-v1', legacy); } catch { /* 容量不足时忽略 */ }
+  }
+  localStorage.removeItem('ratcvs-web-session-v1');
+})();
+
 (function restoreAutosave(): void {
-  const saved = localStorage.getItem('ratcvs-web-session-v1');
+  const saved = localStorage.getItem('ratheart-simpro-session-v1');
   if (!saved) return;
   try {
     const snapshot = JSON.parse(saved);

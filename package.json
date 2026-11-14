@@ -1,11 +1,11 @@
 {
-  "name": "ratcvs-web-cn",
+  "name": "ratheart-simpro",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "RatCVS 中文大鼠心血管实验台 — TypeScript Web 重构",
+  "description": "RatHeart-SimPro 中文大鼠心血管实验台 — TypeScript Web 重构",
   "author": "Pharmacology Teaching Group <ratcvs@example.edu>",
-  "homepage": "https://github.com/Starwords117/ratcvs-rewrite",
+  "homepage": "https://github.com/Starwords117/RatHeart-SimPro",
   "main": "desktop/main.cjs",
   "scripts": {
     "build": "node scripts/build.mjs",
