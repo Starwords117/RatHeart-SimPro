@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#ffffff">
+  <meta name="description" content="RatCVS 中文大鼠心血管实验台。静脉注射药物或刺激自主神经，记录动脉血压、心室压与心率变化。">
+  <title>RatCVS · 大鼠心血管实验台</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' fill='%239c3524'/%3E%3Cpath d='M5 24h6l3-9 4 14 3-7 2 4h12' fill='none' stroke='white' stroke-width='2.8' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="apple-touch-icon" href="./icons/icon-192.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="心血管实验台">
+  <link rel="stylesheet" href="./styles.css">
+  <script type="module" src="./app.js"></script>
+  <script>
+    // PWA：浏览器（http/https）注册离线缓存；Electron（ratcvs://）不需要
+    if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+      addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+    }
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="./" aria-label="RatCVS 实验台首页"><span><strong>RatCVS<span class="brand-divider"> / </span><span class="brand-cn">大鼠心血管实验台</span></strong></span></a>
+    <div class="header-actions"><span class="version-label">Web 0.1</span><button id="help-button" class="text-button" type="button">使用说明</button><button id="model-button" class="text-button" type="button">原理与设置</button></div>
+  </header>
+
+  <main class="page">
+    <section class="page-heading"><div><h1>在体大鼠心血管药理实验</h1><p>选择动物模型，静脉注射药物或刺激自主神经，记录动脉血压、心室内压与心率变化。</p></div><div class="file-actions"><button id="load-button" class="button secondary" type="button">导入实验</button><details class="export-menu"><summary class="button secondary">导出 <span class="chevron">⌄</span></summary><div class="menu-panel"><button id="save-button" type="button">保存完整实验 <small>JSON · 可继续运行</small></button><button id="csv-button" type="button">导出波形数据 <small>CSV · 五通道</small></button><button id="png-button" type="button">导出当前曲线 <small>PNG · 含坐标与标注</small></button><button id="rat-button" type="button">导出原版记录文件 <small>.rat · 与 RatCVS 原版互通</small></button></div></details></div></section>
+    <input id="file-input" type="file" accept=".json,.rat,.RAT" hidden>
+
+    <div class="workspace">
+      <aside class="control-column">
+        <section class="card">
+          <div class="card-title"><h2>动物模型</h2></div>
+          <button id="new-experiment-button" class="button secondary full" type="button">新建实验</button>
+          <div class="radio-row" id="model-radios">
+            <label><input type="radio" name="rat-model" id="radio-pithed" value="pithed" checked> 去脑大鼠</label>
+            <label><input type="radio" name="rat-model" id="radio-normal" value="normal"> 正常大鼠</label>
+          </div>
+          <p class="micro-note">去脑大鼠无中枢神经反射，是标准药理筛选制备；正常大鼠保留压力感受器反馈与基础交感张力。开始记录后不可切换。</p>
+        </section>
+
+        <section class="card drug-card">
+          <div class="card-title"><h2>给药注射</h2></div>
+          <div class="segmented drug-categories" aria-label="药物分组"><button data-group="agonist" class="active" type="button">激动药</button><button data-group="antagonist" type="button">拮抗 / 抑制药</button><button data-group="unknown" type="button">未知药</button></div>
+          <label class="field-label" for="drug-select">药物</label><select id="drug-select" aria-describedby="drug-mechanism"></select>
+          <div class="drug-english" id="drug-english"></div><p class="mechanism" id="drug-mechanism"></p>
+          <label class="field-label" for="dose-select">剂量</label><select id="dose-select"></select>
+          <button id="inject-button" class="button primary full" type="button">注射药物</button>
+          <p class="micro-note" id="dose-hint">药物注入静脉循环后血药浓度按一阶动力学衰减。</p>
+        </section>
+
+        <section class="card stimulus-card">
+          <div class="card-title"><h2>神经刺激</h2></div>
+          <div id="nerve-radios">
+            <label class="nerve-option"><input type="radio" name="nerve-pathway" value="symp_vessel" checked> 交感神经（不含肾上腺）</label>
+            <label class="nerve-option"><input type="radio" name="nerve-pathway" value="cardiac_symp"> 交感神经（心脏支）</label>
+            <label class="nerve-option"><input type="radio" name="nerve-pathway" value="adrenal_symp"> 交感神经（肾上腺支）</label>
+            <label class="nerve-option"><input type="radio" name="nerve-pathway" value="renal_nerve"> 肾神经</label>
+            <label class="nerve-option"><input type="radio" name="nerve-pathway" value="vagus_nerve"> 迷走神经</label>
+          </div>
+          <button id="stimulate-button" class="button secondary full" type="button"><span id="stimulate-label">刺激神经</span></button>
+          <p class="micro-note" id="nerve-hint">刺激血管交感神经末梢，释放去甲肾上腺素。</p>
+        </section>
+      </aside>
+
+      <div class="observation-column">
+        <section class="card chart-card">
+          <div class="chart-heading"><div><h2>血压与心率记录</h2><div class="chart-subtitle"><span class="live-indicator" id="live-indicator"></span><span id="recording-status">实验就绪</span><span class="subtitle-divider">·</span><span id="chart-model">去脑大鼠</span></div></div><div class="chart-toolbar"><label for="window-select">显示窗口</label><select id="window-select"><option value="2000">12.5 s</option><option value="4000" selected>25 s</option><option value="8000">50 s</option><option value="16000">100 s</option><option value="0">全部记录</option></select><button id="window-double" class="text-button" type="button" title="窗口加倍">×2</button><button id="window-half" class="text-button" type="button" title="窗口减半">÷2</button></div></div>
+          <div class="metrics"><div><span>平均动脉压</span><strong id="abp-value">–<small>mmHg</small></strong></div><div><span>心率</span><strong id="hr-value">–<small>bpm</small></strong></div><div><span>仿真时间</span><strong id="time-value" class="time-value">00:00.0</strong></div><div class="last-dose-metric"><span>最近一次操作</span><strong id="last-operation">新建实验</strong></div></div>
+          <div class="plot-wrap" id="plot-wrap"><canvas id="trace-canvas" aria-label="动脉血压、心室内压与心率随时间变化的曲线"></canvas><div class="plot-empty" id="plot-empty"><strong>暂无记录</strong><span>点击开始记录后显示五通道曲线。</span></div><div class="cursor-tooltip hidden" id="cursor-tooltip"></div></div>
+          <div class="chart-bottom"><span><i class="legend-line" style="background:#b03a2e"></i>ABP</span><span><i class="legend-line" style="background:#245e9c"></i>LVP</span><span><i class="legend-line" style="background:#2e8b74"></i>VBP</span><span><i class="legend-line" style="background:#b06f2e"></i>HF</span><span><i class="legend-line" style="background:#3a7d44"></i>HR</span><span class="cursor-hint" id="cursor-readout">点击曲线放置绿色测量光标</span></div>
+          <div class="history-scroll hidden" id="history-scroll"><span>回看时间</span><input id="history-position" type="range" min="0" max="0" step="1" value="0"><button id="latest-button" type="button">回到最新</button></div>
+          <div class="transport"><div class="transport-primary"><button id="run-button" class="button primary" type="button"><span id="run-label">开始记录</span></button><button id="advance-button" class="button secondary" type="button">快进 30 s</button><div class="speed-control"><label for="speed-select">速度</label><select id="speed-select"><option value="0.25" selected>0.25×</option><option value="1">1×</option><option value="2">2×</option><option value="5">5×</option></select></div></div><button id="broadcast-button" class="button ghost hidden" type="button"></button></div>
+        </section>
+
+        <div class="lower-grid">
+          <section class="card apparatus-card"><div class="card-title"><h2>实验制备</h2></div><div class="prep-wrap"><img id="prep-image" src="./prep.png" alt="去脑大鼠制备示意图"></div><p class="apparatus-caption" id="prep-caption">去脑大鼠制备：股动脉插管测动脉血压（ABP），左心室插管测心室内压（LVP），股静脉插管给药并测中心静脉压（VBP），HR 由脉搏间期计算，HF 为心收缩力。</p></section>
+          <section class="card events-card"><div class="card-title"><h2>实验记录 <span class="count-badge" id="event-count">1</span></h2><button id="concentration-button" class="link-button small" type="button">查看循环药物</button></div><div class="event-list" id="event-list" aria-live="polite"></div></section>
+        </div>
+        <p class="workspace-footnote"><span>基于 RatCVS 3.3.7 教学模型 · 原模型 John Dempster, University of Strathclyde · 实验数据保存在当前浏览器。</span></p>
+      </div>
+    </div>
+  </main>
+
+  <dialog id="information-dialog"><div class="dialog-heading"><div><h2 id="dialog-title">原理与设置</h2></div><button id="close-dialog" class="icon-button" aria-label="关闭" type="button">×</button></div><div id="dialog-content" class="dialog-content"></div></dialog>
+  <div class="toast" id="toast" role="status"></div>
+</body>
+</html>

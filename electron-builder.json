@@ -1,0 +1,96 @@
+{
+  "appId": "org.ratcvslab.teaching",
+  "productName": "RatCVSLab",
+  "directories": {
+    "output": "release"
+  },
+  "asar": true,
+  "npmRebuild": false,
+  "files": [
+    "desktop/**/*.cjs",
+    "dist/*.html",
+    "dist/*.js",
+    "dist/*.css",
+    "dist/*.webmanifest",
+    "dist/*.png",
+    "dist/icons/*.png",
+    "package.json"
+  ],
+  "win": {
+    "target": [
+      {
+        "target": "portable",
+        "arch": [
+          "x64"
+        ]
+      },
+      {
+        "target": "nsis",
+        "arch": [
+          "x64"
+        ]
+      }
+    ],
+    "executableName": "RatCVSLab"
+  },
+  "linux": {
+    "target": [
+      {
+        "target": "AppImage",
+        "arch": [
+          "x64"
+        ]
+      },
+      {
+        "target": "deb",
+        "arch": [
+          "x64"
+        ]
+      }
+    ],
+    "category": "Education",
+    "executableName": "ratcvslab"
+  },
+  "mac": {
+    "target": [
+      {
+        "target": "zip",
+        "arch": [
+          "x64",
+          "arm64"
+        ]
+      }
+    ],
+    "category": "public.app-category.education",
+    "identity": null
+  },
+  "portable": {
+    "artifactName": "RatCVSLab-${version}-${arch}-Portable.exe"
+  },
+  "nsis": {
+    "artifactName": "RatCVSLab-${version}-${arch}-Setup.exe",
+    "oneClick": false,
+    "perMachine": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "大鼠心血管实验台",
+    "deleteAppDataOnUninstall": false,
+    "installerLanguages": [
+      "zh_CN"
+    ],
+    "language": "2052"
+  },
+  "appImage": {
+    "artifactName": "RatCVSLab-${version}-${arch}-AppImage"
+  },
+  "deb": {
+    "artifactName": "ratcvslab_${version}_${arch}.deb",
+    "packageCategory": "education",
+    "maintainer": "Pharmacology Teaching Group <ratcvs@example.edu>"
+  },
+  "dmg": {
+    "artifactName": "RatCVSLab-${version}-${arch}.dmg",
+    "title": "RatCVS 中文大鼠心血管实验台"
+  }
+}

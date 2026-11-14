@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#9c3524">
+  <title>RatCVS · 授课跟随</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' fill='%239c3524'/%3E%3Cpath d='M5 24h6l3-9 4 14 3-7 2 4h12' fill='none' stroke='white' stroke-width='2.8' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="stylesheet" href="./styles.css">
+  <script type="module" src="./follow.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="./" aria-label="返回实验台"><span><strong>RatCVS<span class="brand-divider"> / </span><span class="brand-cn">授课跟随</span></strong></span></a>
+    <div class="header-actions"><span class="version-label">Web 0.1</span><span class="live-indicator" id="follow-live"></span><span id="follow-status">正在连接老师端…</span></div>
+  </header>
+
+  <main class="page">
+    <section class="page-heading"><div><h1 id="follow-title">跟随老师的大鼠实验</h1><p>老师端开始授课广播后，这里会实时显示动物模型、血压曲线与每一步操作。本页面只读，实验请使用<a href="./">本地实验台</a>。</p></div></section>
+
+    <section class="card chart-card">
+      <div class="chart-heading"><div><h2>血压与心率记录</h2><div class="chart-subtitle"><span class="live-indicator" id="follow-live2"></span><span id="chart-model">—</span></div></div><div class="chart-toolbar"><label for="window-select">显示窗口</label><select id="window-select"><option value="2000">12.5 s</option><option value="4000" selected>25 s</option><option value="8000">50 s</option><option value="0">全部记录</option></select></div></div>
+      <div class="metrics"><div><span>平均动脉压</span><strong id="abp-value">–<small>mmHg</small></strong></div><div><span>心率</span><strong id="hr-value">–<small>bpm</small></strong></div><div><span>仿真时间</span><strong id="time-value" class="time-value">00:00.0</strong></div><div class="last-dose-metric"><span>最近一次操作</span><strong id="last-operation">等待老师端</strong></div></div>
+      <div class="plot-wrap" id="plot-wrap"><canvas id="trace-canvas" aria-label="老师端血压曲线"></canvas><div class="plot-empty" id="plot-empty"><strong>等待老师开始</strong><span>老师端点击"开始授课广播"后，这里会实时显示曲线。</span></div></div>
+      <div class="chart-bottom"><span><i class="legend-line" style="background:#b03a2e"></i>ABP</span><span><i class="legend-line" style="background:#245e9c"></i>LVP</span><span><i class="legend-line" style="background:#2e8b74"></i>VBP</span><span><i class="legend-line" style="background:#b06f2e"></i>HF</span><span><i class="legend-line" style="background:#3a7d44"></i>HR</span><span class="cursor-hint">老师端操作实时同步</span></div>
+    </section>
+
+    <section class="card events-card follow-events"><div class="card-title"><h2>老师的实验记录 <span class="count-badge" id="event-count">0</span></h2></div><div class="event-list" id="event-list" aria-live="polite"></div></section>
+  </main>
+</body>
+</html>
