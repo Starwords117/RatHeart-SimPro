@@ -325,3 +325,7 @@ dialog::backdrop { background: #0006; }
 .live-banner { display: flex; align-items: center; gap: 14px; margin: 0 0 14px; padding: 10px 14px; border: 1px solid #9fc3e8; border-left: 4px solid var(--accent); background: #eef4fb; color: #202428; font-size: 13px; }
 .live-banner a { text-decoration: none; }
 .live-banner-close { margin-left: auto; border: none; background: none; color: #606970; font-size: 16px; cursor: pointer; padding: 2px 6px; }
+/* 实验记录卡片:列表弹性填满卡片高度(与制备图等高),不再留白 */
+.events-card { display: flex; flex-direction: column; }
+.events-card .card-title { flex: none; }
+.events-card .event-list { flex: 1; min-height: 120px; height: auto; }
