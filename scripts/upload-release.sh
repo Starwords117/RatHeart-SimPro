@@ -25,7 +25,7 @@ ASSETS=(
   release/SHA256SUMS.txt
 )
 
-BODY=$(python3 -c "import json;print(json.dumps(open('release/RELEASE_NOTES_v0.1.2.md',encoding='utf-8').read()))")
+BODY=$(python3 -c "import json;print(json.dumps(open('docs/RELEASE_NOTES_v0.1.2.md',encoding='utf-8').read()))")
 
 echo "==> 已存在的 Release 检查(tag: ${TAG})"
 RELEASE_ID=$(curl -s -H "Authorization: Bearer ${GH_TOKEN}" "${API}/releases/tags/${TAG}" \
