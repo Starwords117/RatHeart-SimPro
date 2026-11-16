@@ -811,7 +811,8 @@ function computeDoseResponse(): { drug: string; dose: number; pre: number; post:
 }
 $('#dose-tool-button')?.addEventListener('click', () => {
   const rows = computeDoseResponse();
-  const table = rows.map(r => `<tr><td>${r.drug}</td><td class="num">${r.dose < 1 ? `${(r.dose * 1000).toFixed(0)} µg/kg` : `${r.dose} mg/kg`}</td><td class="num">${r.pre}</td><td class="num">${r.post}</td><td class="num">${r.peak}</td><td class="num">${r.dAbp > 0 ? '+' : ''}${r.dAbp}</td><td class="num">${r.hrPre}→${r.hrPost}</td></tr>`).join('');
+  const fmtDose = (mg: number) => mg < 1 ? `${+(mg * 1000).toFixed(1)} µg/kg` : `${mg} mg/kg`;
+  const table = rows.map(r => `<tr><td>${r.drug}</td><td class="num">${fmtDose(r.dose)}</td><td class="num">${r.pre}</td><td class="num">${r.post}</td><td class="num">${r.peak}</td><td class="num">${r.dAbp > 0 ? '+' : ''}${r.dAbp}</td><td class="num">${r.hrPre}→${r.hrPost}</td></tr>`).join('');
   openDialog('量效曲线', `
     <p>按给药事件自动计算:给药前 3 s 均值 → 给药后 3~20 s 均值/峰值(ΔABP = 后-前)。同一剂量多次给药逐行列出。</p>
     <table class="work-table"><thead><tr><th>药物</th><th>剂量</th><th>给药前 ABP</th><th>给药后 ABP</th><th>峰值</th><th>ΔABP</th><th>HR 前→后</th></tr></thead><tbody>${rows.map(r => r).length ? table : '<tr><td colspan="7">本次实验尚无给药记录</td></tr>'}</tbody></table>
@@ -832,7 +833,7 @@ $('#dose-tool-button')?.addEventListener('click', () => {
     const Y = (v: number) => 230 - (v - yMin) / (yMax - yMin) * 200;
     c2.strokeStyle = '#aab3bc'; c2.beginPath(); c2.moveTo(40, Y(0)); c2.lineTo(710, Y(0)); c2.stroke();
     c2.fillStyle = '#606970'; c2.font = '10px Consolas'; c2.textAlign = 'center';
-    for (const r of usable) { const x = X(r.dose); c2.strokeStyle = '#e7eaee'; c2.beginPath(); c2.moveTo(x, 20); c2.lineTo(x, 235); c2.stroke(); c2.fillText(`${r.dose < 1 ? (r.dose * 1000).toFixed(0) + 'µg' : r.dose + 'mg'}`, x, 246); }
+    for (const r of usable) { const x = X(r.dose); c2.strokeStyle = '#e7eaee'; c2.beginPath(); c2.moveTo(x, 20); c2.lineTo(x, 235); c2.stroke(); c2.fillText(fmtDose(r.dose).replace(' µg/kg', 'µg').replace(' mg/kg', 'mg'), x, 246); }
     for (const r of rows) if (r.dose > 0) { c2.fillStyle = '#b03a2e'; c2.beginPath(); c2.arc(X(r.dose), Y(r.dAbp), 5, 0, Math.PI * 2); c2.fill(); }
     c2.fillStyle = '#606970'; c2.textAlign = 'left'; c2.fillText('ΔABP mmHg', 8, 16);
   }

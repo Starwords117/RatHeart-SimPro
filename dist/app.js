@@ -775,7 +775,8 @@ function computeDoseResponse() {
 }
 $("#dose-tool-button")?.addEventListener("click", () => {
   const rows = computeDoseResponse();
-  const table = rows.map((r) => `<tr><td>${r.drug}</td><td class="num">${r.dose < 1 ? `${(r.dose * 1e3).toFixed(0)} \xB5g/kg` : `${r.dose} mg/kg`}</td><td class="num">${r.pre}</td><td class="num">${r.post}</td><td class="num">${r.peak}</td><td class="num">${r.dAbp > 0 ? "+" : ""}${r.dAbp}</td><td class="num">${r.hrPre}\u2192${r.hrPost}</td></tr>`).join("");
+  const fmtDose = (mg) => mg < 1 ? `${+(mg * 1e3).toFixed(1)} \xB5g/kg` : `${mg} mg/kg`;
+  const table = rows.map((r) => `<tr><td>${r.drug}</td><td class="num">${fmtDose(r.dose)}</td><td class="num">${r.pre}</td><td class="num">${r.post}</td><td class="num">${r.peak}</td><td class="num">${r.dAbp > 0 ? "+" : ""}${r.dAbp}</td><td class="num">${r.hrPre}\u2192${r.hrPost}</td></tr>`).join("");
   openDialog("\u91CF\u6548\u66F2\u7EBF", `
     <p>\u6309\u7ED9\u836F\u4E8B\u4EF6\u81EA\u52A8\u8BA1\u7B97:\u7ED9\u836F\u524D 3 s \u5747\u503C \u2192 \u7ED9\u836F\u540E 3~20 s \u5747\u503C/\u5CF0\u503C(\u0394ABP = \u540E-\u524D)\u3002\u540C\u4E00\u5242\u91CF\u591A\u6B21\u7ED9\u836F\u9010\u884C\u5217\u51FA\u3002</p>
     <table class="work-table"><thead><tr><th>\u836F\u7269</th><th>\u5242\u91CF</th><th>\u7ED9\u836F\u524D ABP</th><th>\u7ED9\u836F\u540E ABP</th><th>\u5CF0\u503C</th><th>\u0394ABP</th><th>HR \u524D\u2192\u540E</th></tr></thead><tbody>${rows.map((r) => r).length ? table : '<tr><td colspan="7">\u672C\u6B21\u5B9E\u9A8C\u5C1A\u65E0\u7ED9\u836F\u8BB0\u5F55</td></tr>'}</tbody></table>
@@ -809,7 +810,7 @@ $("#dose-tool-button")?.addEventListener("click", () => {
       c2.moveTo(x, 20);
       c2.lineTo(x, 235);
       c2.stroke();
-      c2.fillText(`${r.dose < 1 ? (r.dose * 1e3).toFixed(0) + "\xB5g" : r.dose + "mg"}`, x, 246);
+      c2.fillText(fmtDose(r.dose).replace(" \xB5g/kg", "\xB5g").replace(" mg/kg", "mg"), x, 246);
     }
     for (const r of rows) if (r.dose > 0) {
       c2.fillStyle = "#b03a2e";
