@@ -72,10 +72,12 @@ function drawChart(): void {
   const stride = Math.max(1, Math.floor((end - start) / (pw * 2)));
   const t0 = frames[start].t, t1 = frames[end - 1].t;
 
-  // 事件标记
+  // 事件标记（只标注实验操作，与实验台一致；状态类事件不上图）
+  const CHART_KINDS = new Set(['dose', 'stimulus', 'death', 'import']);
   ctx.save(); ctx.beginPath(); ctx.rect(left, top, pw, ph); ctx.clip();
   let lastLabelX = -1e9, labelRow = 0;
   for (const event of events) {
+    if (!CHART_KINDS.has(event.kind)) continue;
     if (event.t < t0 || event.t > t1) continue;
     const xx = left + (event.t - t0) / (t1 - t0) * pw;
     ctx.strokeStyle = '#c6cdd3'; ctx.lineWidth = .8; ctx.setLineDash([4, 4]);

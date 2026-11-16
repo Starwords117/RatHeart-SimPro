@@ -192,7 +192,11 @@ function drawChart(): void {
     return t1 > t0 ? left + ((t - t0) / (t1 - t0)) * plotW : left;
   };
   let labelRow = 0, lastLabelX = -1e9;
+  // 图表只标注实验操作（给药/刺激/死亡/导入），状态类事件（新建、切换模型、设置）
+  // 只进右侧实验记录面板，避免 t≈0 的事件在图上与通道名重叠
+  const CHART_KINDS = new Set(['dose', 'stimulus', 'death', 'import']);
   for (const event of events) {
+    if (!CHART_KINDS.has(event.kind)) continue;
     if (event.t < tAt(start) || event.t > tAt(end - 1)) continue;
     const x = xAt(event.t);
     context.strokeStyle = '#c6cdd3';
@@ -201,7 +205,7 @@ function drawChart(): void {
     context.moveTo(x, top); context.lineTo(x, top + plotH);
     context.stroke();
     context.setLineDash([]);
-    if (x - lastLabelX > 72 || labelRow === 1) {
+    if (x - lastLabelX > 72) {
       context.fillStyle = EVENT_COLORS[event.kind] ?? '#78818a';
       context.font = '11px Consolas, monospace';
       context.textAlign = 'left';
