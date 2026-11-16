@@ -1,4 +1,4 @@
-# RatHeart-SimPro · 大鼠心血管实验台（v0.1.3）
+# RatHeart-SimPro · 大鼠心血管实验台（v0.1.4）
 
 用 TypeScript 重构 RatCVS 3.3.7 的大鼠心血管系统仿真，并建立中文 Web 操作界面。
 计算在 Web Worker 中推进，界面绘制 ABP / LVP / VBP / HF / HR 五通道图纸记录仪曲线。
