@@ -40,7 +40,10 @@ function createBroadcastServer({ root, port, openLan = true }) {
   root = path.resolve(root);
   const broadcast = {
     seq: 0, state: null, frames: [], events: [], updatedAt: 0,
-    live: false, followers: new Set()
+    live: false, followers: new Set(),
+    // 绝对帧号计数:frames 是滚动窗口(满 18000 后头部被挤出),
+    // 学生端按绝对号增量拉取;totalAbs - frames.length = 窗口起点
+    totalAbs: 0
   };
 
   function broadcastChunk(payload) {
@@ -56,9 +59,11 @@ function createBroadcastServer({ root, port, openLan = true }) {
       broadcast.frames = Array.isArray(message.frames) ? message.frames.slice(-MAX_BROADCAST_FRAMES) : [];
       broadcast.events = Array.isArray(message.events) ? message.events : [];
       broadcast.state = message.state ?? null;
+      broadcast.totalAbs = broadcast.frames.length;
     } else if (message.type === 'chunk') {
       if (Array.isArray(message.frames)) {
         broadcast.frames.push(...message.frames);
+        broadcast.totalAbs += message.frames.length;
         if (broadcast.frames.length > MAX_BROADCAST_FRAMES) {
           broadcast.frames.splice(0, broadcast.frames.length - MAX_BROADCAST_FRAMES);
         }
@@ -129,18 +134,23 @@ function createBroadcastServer({ root, port, openLan = true }) {
       return;
     }
     if (pathname === '/api/poll' && req.method === 'GET') {
+      // 学生 f 为绝对帧号;窗口滑动挤出后(f < windowStart)自动重置
       const f = Math.max(0, Number(url.searchParams.get('f') ?? 0) || 0);
       const e = Math.max(0, Number(url.searchParams.get('e') ?? 0) || 0);
       const seqMatch = Number(url.searchParams.get('seq') ?? -1) === broadcast.seq;
-      const inRange = f <= broadcast.frames.length && e <= broadcast.events.length;
+      const windowStart = broadcast.totalAbs - broadcast.frames.length;
+      const inRange = f >= windowStart && f <= broadcast.totalAbs && e <= broadcast.events.length;
       const reset = !seqMatch || !inRange;
+      const relF = Math.max(0, f - windowStart);
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-cache' });
       res.end(JSON.stringify({
         seq: broadcast.seq,
         reset,
         state: broadcast.state,
-        frames: reset ? broadcast.frames : broadcast.frames.slice(f),
+        frames: reset ? broadcast.frames : broadcast.frames.slice(relF),
         events: reset ? broadcast.events : broadcast.events.slice(e),
+        totalAbs: broadcast.totalAbs,
+        windowStart,
         totalF: broadcast.frames.length,
         totalE: broadcast.events.length,
         updatedAt: broadcast.updatedAt

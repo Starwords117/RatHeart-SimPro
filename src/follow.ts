@@ -27,14 +27,34 @@ function setStatus(text: string, live: boolean): void {
 }
 // 仿真时间本地走表:每次收到广播状态即重设基准,渲染 tick 间本地插值;
 // 教师暂停(state.running=false)或广播停止(收到空状态)时冻结
-let timeBase = 0, timeAt = 0, timeFrozen = true;
+// 回放缓冲:到达的帧进缓冲,渲染以与教师端相同的速率匀速"重放"——
+// 曲线如真实图纸记录仪匀速走纸,时间与曲线严格锁定;延迟(水位)可容忍,
+// 平滑性与网络批次无关。教师暂停时水位停涨,回放自然停在最新帧。
+let replayIdx = 0;
+let lastReplayAt = performance.now();
+function tickReplay(): void {
+  const now = performance.now();
+  const rate = 160 * Math.max(0.05, state?.speed ?? 0.25);   // 子样本/墙钟秒(教师生成速率×播放速度)
+  const elapsed = Math.min((now - lastReplayAt) / 1000, 2);   // 后台标签回来时限制单次追赶
+  lastReplayAt = now;
+  const water = frames.length;
+  const advance = elapsed * rate;
+  // 落后水位超过 2 秒(网络卡顿恢复)→ 快进到水位前一秒,保持缓冲
+  if (water - replayIdx > rate * 2) replayIdx = Math.max(0, water - Math.round(rate));
+  replayIdx = Math.min(water, replayIdx + advance);
+  if (replayIdx < water - rate * 2 - 1) lastReplayAt = now;   // 刚快进过,重置计时
+}
+function replayEnd(): number {
+  return Math.max(2, Math.min(Math.floor(replayIdx), frames.length));
+}
 function renderHeader(): void {
   if (!state) return;
   $('#chart-model').textContent = state.pithed ? '去脑大鼠' : '正常大鼠';
   $('#abp-value').innerHTML = `${state.art?.meanP > 0 ? state.art.meanP.toFixed(1) : '–'}<small>mmHg</small>`;
   $('#hr-value').innerHTML = `${state.heart?.rate > 1 ? Math.round(state.heart.rate) : '–'}<small>bpm</small>`;
-  const shown = timeFrozen || !state.running ? timeBase : timeBase + (performance.now() - timeAt) / 1000;
-  $('#time-value').textContent = time(shown, true);
+  // 时间与曲线严格锁定:显示回放位置的帧时间
+  const idx = Math.max(0, Math.min(Math.floor(replayIdx), frames.length) - 1);
+  $('#time-value').textContent = time(frames.length ? frames[idx].t : 0, true);
   $('#last-operation').textContent = events.at(-1)?.text ?? '—';
 }
 function renderEvents(): void {
@@ -66,7 +86,7 @@ function drawChart(): void {
   // 按下标开窗(取最近 N 个子样本):服务器只保留最近 18000 帧,
   // 帧的 t 是绝对时间,不能再用 时间/采样间隔 反推下标
   const windowSamples = Number(($<HTMLSelectElement>('#window-select')).value);
-  const end = Math.min(historyEnd ?? frames.length, frames.length);
+  const end = Math.min(historyEnd ?? replayEnd(), frames.length);
   const start = windowSamples > 0 ? Math.max(0, end - windowSamples) : 0;
   if (end - start < 2) return;
 
@@ -163,10 +183,14 @@ function renderHistorySlider(): void {
 }
 
 // 跟随页可能处于后台标签/低频渲染环境：用固定间隔驱动，不依赖 requestAnimationFrame
+// 曲线以回放速率匀速推进(10Hz 重绘),不再依赖数据到达的批次节奏
 setInterval(() => {
   try {
+    tickReplay();
     renderHistorySlider();
-    if (dirty) { renderHeader(); renderEvents(); drawChart(); dirty = false; }
+    renderHeader();
+    renderEvents();
+    drawChart();
   } catch (error) {
     (window as any).__followError = String((error as Error)?.stack ?? error);
   }
@@ -174,15 +198,14 @@ setInterval(() => {
 
 function applyUpdate(reset: boolean, message: any): void {
   state = message.state ?? state;
-  if (message.state) {
-    // 广播状态到达即重设本地走表基准;教师暂停时不插值
-    timeBase = message.state.time ?? timeBase;
-    timeAt = performance.now();
-    timeFrozen = !message.state.running;
-  } else {
-    timeFrozen = true;   // 广播停止:冻结在最后时刻
+  if (reset) {
+    frames = message.frames ?? [];
+    events = message.events ?? [];
+    lastRenderedEventCount = -1;
+    // 全量窗口到达(教师重置/重推):直接对齐到最新,不做回放等待
+    replayIdx = frames.length;
+    lastReplayAt = performance.now();
   }
-  if (reset) { frames = message.frames ?? []; events = message.events ?? []; lastRenderedEventCount = -1; }
   else {
     if (message.frames?.length) frames.push(...message.frames);
     if (message.events?.length) events.push(...message.events);
@@ -191,7 +214,7 @@ function applyUpdate(reset: boolean, message: any): void {
 }
 
 // HTTP 轮询：增量拉取老师端状态。
-// 自适应间隔:跟随中 0.2 s(体感延迟 ≤0.3 s),等待开播/连接中断 1.5 s 减负
+// 自适应间隔:跟随中 0.05 s(水位充足),等待开播/连接中断 1.5 s 减负
 let seenSeq = -1, sentF = 0, sentE = 0, polling = false;
 let pollTimer: ReturnType<typeof setInterval> | undefined;
 let pollIntervalMs = 1500;
@@ -204,24 +227,31 @@ function setPollInterval(ms: number): void {
 async function poll(): Promise<void> {
   if (polling) return;
   polling = true;
+  // fetch 无默认超时:Keep-Alive 连接被静默关闭时会永久挂起,
+  // polling 标志卡死导致轮询链断——必须显式超时
+  const ctrl = new AbortController();
+  const kill = setTimeout(() => ctrl.abort(), 3000);
   try {
-    const res = await fetch(`/api/poll?f=${sentF}&e=${sentE}&seq=${seenSeq}`, { cache: 'no-store' });
+    const res = await fetch(`/api/poll?f=${sentF}&e=${sentE}&seq=${seenSeq}`, { cache: 'no-store', signal: ctrl.signal });
     if (!res.ok) throw new Error(String(res.status));
     const data = await res.json();
     seenSeq = data.seq;
     applyUpdate(!!data.reset || !data.state, data);
-    sentF = data.totalF; sentE = data.totalE;
+    // f 为绝对帧号(服务器窗口滑动挤出旧帧时自动重置)
+    sentF = data.totalAbs; sentE = data.totalE;
     if (data.state) {
-      // 教师端推送陈旧(>10s 未更新,如页面崩溃/网络中断)→ 判定中断并冻结走表
+      // 教师端推送陈旧(>10s 未更新,如页面崩溃/网络中断)→ 提示等待恢复;
+      // 回放缓冲会自然排空,曲线与时间停在最后时刻
       const stale = Date.now() - (data.updatedAt ?? 0) > 10000;
-      if (stale) timeFrozen = true;
       setStatus(stale ? '教师端连接已中断，等待恢复…' : '实时跟随老师端', !stale);
       setPollInterval(stale ? 1500 : 50);
     }
     else { setStatus('老师端尚未开始广播，等待中…', false); setPollInterval(1500); }
   } catch {
     setStatus('连接中断，自动重试中…', false);
+    setPollInterval(200);
   } finally {
+    clearTimeout(kill);
     polling = false;
   }
 }

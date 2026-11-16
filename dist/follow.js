@@ -20,14 +20,29 @@ function setStatus(text, live) {
   $("#follow-live").classList.toggle("running", live);
   $("#follow-live2").classList.toggle("running", live);
 }
-let timeBase = 0, timeAt = 0, timeFrozen = true;
+let replayIdx = 0;
+let lastReplayAt = performance.now();
+function tickReplay() {
+  const now = performance.now();
+  const rate = 160 * Math.max(0.05, state?.speed ?? 0.25);
+  const elapsed = Math.min((now - lastReplayAt) / 1e3, 2);
+  lastReplayAt = now;
+  const water = frames.length;
+  const advance = elapsed * rate;
+  if (water - replayIdx > rate * 2) replayIdx = Math.max(0, water - Math.round(rate));
+  replayIdx = Math.min(water, replayIdx + advance);
+  if (replayIdx < water - rate * 2 - 1) lastReplayAt = now;
+}
+function replayEnd() {
+  return Math.max(2, Math.min(Math.floor(replayIdx), frames.length));
+}
 function renderHeader() {
   if (!state) return;
   $("#chart-model").textContent = state.pithed ? "\u53BB\u8111\u5927\u9F20" : "\u6B63\u5E38\u5927\u9F20";
   $("#abp-value").innerHTML = `${state.art?.meanP > 0 ? state.art.meanP.toFixed(1) : "\u2013"}<small>mmHg</small>`;
   $("#hr-value").innerHTML = `${state.heart?.rate > 1 ? Math.round(state.heart.rate) : "\u2013"}<small>bpm</small>`;
-  const shown = timeFrozen || !state.running ? timeBase : timeBase + (performance.now() - timeAt) / 1e3;
-  $("#time-value").textContent = time(shown, true);
+  const idx = Math.max(0, Math.min(Math.floor(replayIdx), frames.length) - 1);
+  $("#time-value").textContent = time(frames.length ? frames[idx].t : 0, true);
   $("#last-operation").textContent = events.at(-1)?.text ?? "\u2014";
 }
 function renderEvents() {
@@ -67,7 +82,7 @@ function drawChart() {
   $("#plot-empty").classList.toggle("hidden", frames.length > 1);
   if (frames.length < 2) return;
   const windowSamples = Number($("#window-select").value);
-  const end = Math.min(historyEnd ?? frames.length, frames.length);
+  const end = Math.min(historyEnd ?? replayEnd(), frames.length);
   const start = windowSamples > 0 ? Math.max(0, end - windowSamples) : 0;
   if (end - start < 2) return;
   const left = width < 480 ? 42 : 46, right = 12, top = 8, bottom = 30;
@@ -200,30 +215,23 @@ function renderHistorySlider() {
 }
 setInterval(() => {
   try {
+    tickReplay();
     renderHistorySlider();
-    if (dirty) {
-      renderHeader();
-      renderEvents();
-      drawChart();
-      dirty = false;
-    }
+    renderHeader();
+    renderEvents();
+    drawChart();
   } catch (error) {
     window.__followError = String(error?.stack ?? error);
   }
 }, 100);
 function applyUpdate(reset, message) {
   state = message.state ?? state;
-  if (message.state) {
-    timeBase = message.state.time ?? timeBase;
-    timeAt = performance.now();
-    timeFrozen = !message.state.running;
-  } else {
-    timeFrozen = true;
-  }
   if (reset) {
     frames = message.frames ?? [];
     events = message.events ?? [];
     lastRenderedEventCount = -1;
+    replayIdx = frames.length;
+    lastReplayAt = performance.now();
   } else {
     if (message.frames?.length) frames.push(...message.frames);
     if (message.events?.length) events.push(...message.events);
@@ -242,17 +250,18 @@ function setPollInterval(ms) {
 async function poll() {
   if (polling) return;
   polling = true;
+  const ctrl = new AbortController();
+  const kill = setTimeout(() => ctrl.abort(), 3e3);
   try {
-    const res = await fetch(`/api/poll?f=${sentF}&e=${sentE}&seq=${seenSeq}`, { cache: "no-store" });
+    const res = await fetch(`/api/poll?f=${sentF}&e=${sentE}&seq=${seenSeq}`, { cache: "no-store", signal: ctrl.signal });
     if (!res.ok) throw new Error(String(res.status));
     const data = await res.json();
     seenSeq = data.seq;
     applyUpdate(!!data.reset || !data.state, data);
-    sentF = data.totalF;
+    sentF = data.totalAbs;
     sentE = data.totalE;
     if (data.state) {
       const stale = Date.now() - (data.updatedAt ?? 0) > 1e4;
-      if (stale) timeFrozen = true;
       setStatus(stale ? "\u6559\u5E08\u7AEF\u8FDE\u63A5\u5DF2\u4E2D\u65AD\uFF0C\u7B49\u5F85\u6062\u590D\u2026" : "\u5B9E\u65F6\u8DDF\u968F\u8001\u5E08\u7AEF", !stale);
       setPollInterval(stale ? 1500 : 50);
     } else {
@@ -261,7 +270,9 @@ async function poll() {
     }
   } catch {
     setStatus("\u8FDE\u63A5\u4E2D\u65AD\uFF0C\u81EA\u52A8\u91CD\u8BD5\u4E2D\u2026", false);
+    setPollInterval(200);
   } finally {
+    clearTimeout(kill);
     polling = false;
   }
 }
