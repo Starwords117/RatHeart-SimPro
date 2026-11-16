@@ -557,8 +557,9 @@ $("#concentration-button").addEventListener("click", () => {
   const rows = activeDrugs.map((d) => `<tr><td>${d.name}\uFF08${d.short}\uFF09</td><td>\u8840\u836F ${d.dose.toExponential(2)} mg/kg</td><td>\u6CE8\u5C04\u6B8B\u4F59 ${d.injected.toExponential(2)}</td></tr>`).join("");
   openDialog("\u5FAA\u73AF\u836F\u7269\u6D53\u5EA6", `<p>\u5F53\u524D\u5FAA\u73AF\u4E2D\u7684\u836F\u7269\uFF08\u5242\u91CF\u5355\u4F4D mg/kg\uFF0C\u8840\u836F\u6D53\u5EA6\u6309\u4E00\u9636\u52A8\u529B\u5B66\u8870\u51CF\uFF09\uFF1A</p><table class="drug-table"><thead><tr><th>\u836F\u7269</th><th>\u8840\u836F\u6D53\u5EA6</th><th>\u6CE8\u5C04 compartment \u6B8B\u4F59</th></tr></thead><tbody>${rows || '<tr><td colspan="3">\u65E0</td></tr>'}</tbody></table>`);
 });
+const BROADCAST_CAPABLE = location.protocol.startsWith("http") || location.protocol === "ratheart:";
 const broadcastButton = $("#broadcast-button");
-if (location.protocol.startsWith("http")) {
+if (BROADCAST_CAPABLE) {
   broadcastButton.classList.remove("hidden");
   broadcastButton.textContent = "\u5F00\u59CB\u6388\u8BFE\u5E7F\u64AD";
   broadcastButton.addEventListener("click", () => {
@@ -575,7 +576,7 @@ if (location.protocol.startsWith("http")) {
 let lastSessionLive = false;
 let liveBannerDismissed = false;
 function pollLiveSession() {
-  if (!location.protocol.startsWith("http")) return;
+  if (!BROADCAST_CAPABLE) return;
   fetch("/api/session", { cache: "no-store" }).then((r) => r.json()).then((data) => {
     if (lastSessionLive === false && data.live) liveBannerDismissed = false;
     lastSessionLive = !!data.live;

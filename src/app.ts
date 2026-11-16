@@ -584,8 +584,10 @@ $('#concentration-button').addEventListener('click', () => {
 });
 
 // ---- 广播 ----
+// web(http/https)与桌面版(ratheart://,内嵌广播服务器 + /api 代理)均支持
+const BROADCAST_CAPABLE = location.protocol.startsWith('http') || location.protocol === 'ratheart:';
 const broadcastButton = $<HTMLButtonElement>('#broadcast-button');
-if (location.protocol.startsWith('http')) {
+if (BROADCAST_CAPABLE) {
   broadcastButton.classList.remove('hidden');
   broadcastButton.textContent = '开始授课广播';
   broadcastButton.addEventListener('click', () => {
@@ -604,7 +606,7 @@ if (location.protocol.startsWith('http')) {
 let lastSessionLive = false;
 let liveBannerDismissed = false;
 function pollLiveSession(): void {
-  if (!location.protocol.startsWith('http')) return;
+  if (!BROADCAST_CAPABLE) return;
   fetch('/api/session', { cache: 'no-store' })
     .then(r => r.json())
     .then(data => {
