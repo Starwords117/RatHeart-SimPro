@@ -387,7 +387,7 @@ worker.onmessage = (event: MessageEvent) => {
       if (m.replace) { frames = m.frames; events = m.events; historyEnd = null; cursorTime = null; }
       else { frames.push(...m.frames); events.push(...m.events); }
       renderState();
-      if (m.frames.length || m.replace) renderEvents();
+      if (m.frames.length || m.events.length || m.replace) renderEvents();
       dirty = true;
       break;
     case 'broadcast':
@@ -575,7 +575,7 @@ dialog.addEventListener('click', (event) => {
   if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close();
 });
 $('#help-button').addEventListener('click', () => openDialog('使用说明', HELP_HTML));
-$('#model-button').addEventListener('click', () => { renderSettingsDialog(); openDialog('原理与设置', settingsHtml); });
+$('#model-button').addEventListener('click', renderSettingsDialog);
 
 const HELP_HTML = `
 <p><strong>实验流程（对应原版 RatCVS User Guide）</strong></p>
@@ -594,8 +594,7 @@ const HELP_HTML = `
 
 let settingsHtml = '';
 function renderSettingsDialog(): void {
-  settingsHtml = `
-  <p><strong>模型结构</strong>：三室集总参数模型（心脏、动脉、静脉）+ 两个单向阀。心脏收缩弹性为高斯脉冲，积分步长 0.125 ms，每 12.5 ms 输出一个显示点（2 个子样本）；受体激活与血药动力学每 5 ms 更新。</p>
+  settingsHtml = `  <p><strong>模型结构</strong>：三室集总参数模型（心脏、动脉、静脉）+ 两个单向阀。心脏收缩弹性为高斯脉冲，积分步长 0.125 ms，每 12.5 ms 输出一个显示点（2 个子样本）；受体激活与血药动力学每 5 ms 更新。</p>
   <p><strong>受体方程</strong>（竞争性占领）：激活量 = Σ(效能ᵢ·xᵢ)/(1+Σxᵢ)，其中 xᵢ = 剂量ᵢ/(效力ᵢ× potencyShift)；拮抗药效能 0。PDE 抑制使 β 效力 shift = 1 − PDE×0.5。</p>
   <p><strong>血药动力学</strong>：dDose/dt = k_on·(Injected−Dose) − k_off·Dose；注射剂量带 ±10% 随机波动，效力参数带 ±50% 个体差异（与原版一致）。</p>
   <p><strong>压力感受器反射</strong>（仅正常大鼠）：迷走张力 = 5/(1+e^(−(MAP−130)/8))；基础交感张力恒定。</p>
@@ -603,6 +602,8 @@ function renderSettingsDialog(): void {
   <div class="setting-row"><div><strong>随机种子</strong><small>修改后点击「应用」以新种子重建实验</small></div><input id="seed-input" class="seed-input" type="number" value="${state?.seed ?? 0}"></div>
   <button id="apply-settings" class="button primary" type="button">应用（重建实验）</button>
   <p class="model-note">模型版本 ${MODEL_VERSION} · 移植自 RatCVS 3.3.7 (30.07.20) · 原版 (c) J. Dempster, University of Strathclyde。原版“刺激心交感神经”因 iSympHeart 未赋值实际注入肾上腺素，本版按原版行为复刻。</p>`;
+  // 先注入 DOM,再给动态元素挂监听(否则查询为 null)
+  openDialog('原理与设置', settingsHtml);
   $('#noise-toggle').addEventListener('change', (event) => send('noise', { value: (event.target as HTMLInputElement).checked }));
   $('#apply-settings').addEventListener('click', () => {
     const seed = Number($<HTMLInputElement>('#seed-input').value) >>> 0;

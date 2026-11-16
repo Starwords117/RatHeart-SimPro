@@ -373,7 +373,7 @@ worker.onmessage = (event) => {
         events.push(...m.events);
       }
       renderState();
-      if (m.frames.length || m.replace) renderEvents();
+      if (m.frames.length || m.events.length || m.replace) renderEvents();
       dirty = true;
       break;
     case "broadcast":
@@ -545,10 +545,7 @@ dialog.addEventListener("click", (event) => {
   if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close();
 });
 $("#help-button").addEventListener("click", () => openDialog("\u4F7F\u7528\u8BF4\u660E", HELP_HTML));
-$("#model-button").addEventListener("click", () => {
-  renderSettingsDialog();
-  openDialog("\u539F\u7406\u4E0E\u8BBE\u7F6E", settingsHtml);
-});
+$("#model-button").addEventListener("click", renderSettingsDialog);
 const HELP_HTML = `
 <p><strong>\u5B9E\u9A8C\u6D41\u7A0B\uFF08\u5BF9\u5E94\u539F\u7248 RatCVS User Guide\uFF09</strong></p>
 <ol>
@@ -565,8 +562,7 @@ const HELP_HTML = `
 `;
 let settingsHtml = "";
 function renderSettingsDialog() {
-  settingsHtml = `
-  <p><strong>\u6A21\u578B\u7ED3\u6784</strong>\uFF1A\u4E09\u5BA4\u96C6\u603B\u53C2\u6570\u6A21\u578B\uFF08\u5FC3\u810F\u3001\u52A8\u8109\u3001\u9759\u8109\uFF09+ \u4E24\u4E2A\u5355\u5411\u9600\u3002\u5FC3\u810F\u6536\u7F29\u5F39\u6027\u4E3A\u9AD8\u65AF\u8109\u51B2\uFF0C\u79EF\u5206\u6B65\u957F 0.125 ms\uFF0C\u6BCF 12.5 ms \u8F93\u51FA\u4E00\u4E2A\u663E\u793A\u70B9\uFF082 \u4E2A\u5B50\u6837\u672C\uFF09\uFF1B\u53D7\u4F53\u6FC0\u6D3B\u4E0E\u8840\u836F\u52A8\u529B\u5B66\u6BCF 5 ms \u66F4\u65B0\u3002</p>
+  settingsHtml = `  <p><strong>\u6A21\u578B\u7ED3\u6784</strong>\uFF1A\u4E09\u5BA4\u96C6\u603B\u53C2\u6570\u6A21\u578B\uFF08\u5FC3\u810F\u3001\u52A8\u8109\u3001\u9759\u8109\uFF09+ \u4E24\u4E2A\u5355\u5411\u9600\u3002\u5FC3\u810F\u6536\u7F29\u5F39\u6027\u4E3A\u9AD8\u65AF\u8109\u51B2\uFF0C\u79EF\u5206\u6B65\u957F 0.125 ms\uFF0C\u6BCF 12.5 ms \u8F93\u51FA\u4E00\u4E2A\u663E\u793A\u70B9\uFF082 \u4E2A\u5B50\u6837\u672C\uFF09\uFF1B\u53D7\u4F53\u6FC0\u6D3B\u4E0E\u8840\u836F\u52A8\u529B\u5B66\u6BCF 5 ms \u66F4\u65B0\u3002</p>
   <p><strong>\u53D7\u4F53\u65B9\u7A0B</strong>\uFF08\u7ADE\u4E89\u6027\u5360\u9886\uFF09\uFF1A\u6FC0\u6D3B\u91CF = \u03A3(\u6548\u80FD\u1D62\xB7x\u1D62)/(1+\u03A3x\u1D62)\uFF0C\u5176\u4E2D x\u1D62 = \u5242\u91CF\u1D62/(\u6548\u529B\u1D62\xD7 potencyShift)\uFF1B\u62EE\u6297\u836F\u6548\u80FD 0\u3002PDE \u6291\u5236\u4F7F \u03B2 \u6548\u529B shift = 1 \u2212 PDE\xD70.5\u3002</p>
   <p><strong>\u8840\u836F\u52A8\u529B\u5B66</strong>\uFF1AdDose/dt = k_on\xB7(Injected\u2212Dose) \u2212 k_off\xB7Dose\uFF1B\u6CE8\u5C04\u5242\u91CF\u5E26 \xB110% \u968F\u673A\u6CE2\u52A8\uFF0C\u6548\u529B\u53C2\u6570\u5E26 \xB150% \u4E2A\u4F53\u5DEE\u5F02\uFF08\u4E0E\u539F\u7248\u4E00\u81F4\uFF09\u3002</p>
   <p><strong>\u538B\u529B\u611F\u53D7\u5668\u53CD\u5C04</strong>\uFF08\u4EC5\u6B63\u5E38\u5927\u9F20\uFF09\uFF1A\u8FF7\u8D70\u5F20\u529B = 5/(1+e^(\u2212(MAP\u2212130)/8))\uFF1B\u57FA\u7840\u4EA4\u611F\u5F20\u529B\u6052\u5B9A\u3002</p>
@@ -574,6 +570,7 @@ function renderSettingsDialog() {
   <div class="setting-row"><div><strong>\u968F\u673A\u79CD\u5B50</strong><small>\u4FEE\u6539\u540E\u70B9\u51FB\u300C\u5E94\u7528\u300D\u4EE5\u65B0\u79CD\u5B50\u91CD\u5EFA\u5B9E\u9A8C</small></div><input id="seed-input" class="seed-input" type="number" value="${state?.seed ?? 0}"></div>
   <button id="apply-settings" class="button primary" type="button">\u5E94\u7528\uFF08\u91CD\u5EFA\u5B9E\u9A8C\uFF09</button>
   <p class="model-note">\u6A21\u578B\u7248\u672C ${MODEL_VERSION} \xB7 \u79FB\u690D\u81EA RatCVS 3.3.7 (30.07.20) \xB7 \u539F\u7248 (c) J. Dempster, University of Strathclyde\u3002\u539F\u7248\u201C\u523A\u6FC0\u5FC3\u4EA4\u611F\u795E\u7ECF\u201D\u56E0 iSympHeart \u672A\u8D4B\u503C\u5B9E\u9645\u6CE8\u5165\u80BE\u4E0A\u817A\u7D20\uFF0C\u672C\u7248\u6309\u539F\u7248\u884C\u4E3A\u590D\u523B\u3002</p>`;
+  openDialog("\u539F\u7406\u4E0E\u8BBE\u7F6E", settingsHtml);
   $("#noise-toggle").addEventListener("change", (event) => send("noise", { value: event.target.checked }));
   $("#apply-settings").addEventListener("click", () => {
     const seed = Number($("#seed-input").value) >>> 0;
