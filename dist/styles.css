@@ -318,3 +318,7 @@ dialog::backdrop { background: #0006; }
 }
 .broadcast-hint { margin: 6px 16px 0; color: var(--accent); font-size: 12px; line-height: 1.7; user-select: all; }
 .broadcast-hint code { font-family: Consolas, monospace; }
+.ip-toggle { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; margin-left: 6px; border: 1.4px solid var(--accent); border-radius: 50%; color: var(--accent); font: 600 11px/1 Consolas, monospace; cursor: pointer; user-select: none; vertical-align: -2px; }
+.ip-toggle:hover { background: var(--accent-soft); }
+.ip-alt { color: var(--muted); }
+.ip-alt code { color: var(--muted); }

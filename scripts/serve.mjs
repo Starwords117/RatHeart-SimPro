@@ -2,7 +2,20 @@ import http from 'node:http';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
+import dgram from 'node:dgram';
 import { spawn } from 'node:child_process';
+
+// 探测对外主 IP:UDP connect 走一次路由选择(不发包),OS 直接给出
+// 默认路由对应的本机地址;教室无外网/无默认路由时超时返回 null
+function detectPrimaryIp(timeoutMs = 500) {
+  return new Promise(resolve => {
+    const socket = dgram.createSocket('udp4');
+    const done = ip => { clearTimeout(timer); try { socket.close(); } catch { /* 已关闭 */ } resolve(ip); };
+    const timer = setTimeout(() => done(null), timeoutMs);
+    socket.on('error', () => done(null));
+    socket.connect(53, '8.8.8.8', () => done(socket.address().address));
+  });
+}
 
 const root = path.resolve('dist');
 const args = process.argv.slice(2);
@@ -139,8 +152,15 @@ const server = http.createServer(async (req, res) => {
     // 教学 Wi-Fi 网段排前,虚拟/桥接网卡地址殿后
     const rank = s => (s.includes('192.168.') ? 0 : s.includes('10.') ? 1 : s.includes('172.') ? 2 : 3);
     addresses.sort((a, b) => rank(a) - rank(b));
+    // 默认路由探测到的 IP 为主地址(学生只需抄这一个);探测失败则不设主地址
+    const primaryIp = await detectPrimaryIp();
+    const primary = primaryIp && addresses.some(a => a.includes(primaryIp)) ? `http://${primaryIp}:${port}` : null;
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify({ lan: openLan, port, addresses, follow: addresses.map(a => `${a}/follow.html`) }));
+    res.end(JSON.stringify({
+      lan: openLan, port, addresses, primary,
+      follow: addresses.map(a => `${a}/follow.html`),
+      primaryFollow: primary ? `${primary}/follow.html` : null
+    }));
     return;
   }
 

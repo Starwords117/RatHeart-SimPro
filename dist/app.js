@@ -380,8 +380,8 @@ worker.onmessage = (event) => {
       const was = broadcasting;
       broadcasting = m.on;
       updateBroadcastButton(m.followers ?? 0, m.error);
-      if (!was && broadcasting && lanInfo?.follow.length) {
-        toast(`\u6388\u8BFE\u5E7F\u64AD\u5DF2\u5F00\u542F,\u540C\u5B66\u6D4F\u89C8\u5668\u8BBF\u95EE:${lanInfo.follow[0]}`);
+      if (!was && broadcasting && lanInfo?.primaryFollow) {
+        toast(`\u6388\u8BFE\u5E7F\u64AD\u5DF2\u5F00\u542F,\u540C\u5B66\u6D4F\u89C8\u5668\u8BBF\u95EE:${lanInfo.primaryFollow}`);
       }
       break;
     }
@@ -443,7 +443,15 @@ function updateBroadcastButton(followers, error = false) {
     hint.textContent = "\u5F53\u524D\u672A\u5F00\u653E\u5C40\u57DF\u7F51\uFF1A\u8BF7\u5728\u6559\u5B66\u673A\u4EE5 npm start -- --lan \u91CD\u65B0\u542F\u52A8,\u540C\u5B66\u624D\u80FD\u8BBF\u95EE\u3002";
     return;
   }
-  hint.innerHTML = `\u540C\u5B66\u6D4F\u89C8\u5668\u6253\u5F00:<code>${lanInfo.follow.join("</code> \u6216 <code>")}</code>(\u540C\u4E00 Wi-Fi,\u5B9E\u65F6\u8DDF\u968F)`;
+  if (lanInfo.primaryFollow) {
+    const others = lanInfo.follow.filter((u) => u !== lanInfo.primaryFollow);
+    hint.innerHTML = `\u540C\u5B66\u6D4F\u89C8\u5668\u6253\u5F00:<code>${lanInfo.primaryFollow}</code>(\u540C\u4E00 Wi-Fi,\u5B9E\u65F6\u8DDF\u968F)` + (others.length ? ` <span class="ip-toggle" id="ip-toggle" title="\u5176\u4ED6\u53EF\u80FD\u7684\u5730\u5740">?</span><span class="ip-alt hidden">${others.map((u) => `<code>${u}</code>`).join("\u3001")}</span>` : "");
+    hint.querySelector("#ip-toggle")?.addEventListener("click", () => {
+      hint.querySelector(".ip-alt")?.classList.toggle("hidden");
+    });
+  } else {
+    hint.innerHTML = `\u540C\u5B66\u6D4F\u89C8\u5668\u6253\u5F00(\u591A\u9009\u4E00,\u4F18\u5148\u7B2C\u4E00\u4E2A):${lanInfo.follow.map((u) => `<code>${u}</code>`).join("\u3001")}(\u540C\u4E00 Wi-Fi,\u5B9E\u65F6\u8DDF\u968F)`;
+  }
 }
 $("#drug-select").addEventListener("change", updateDrug);
 for (const button of document.querySelectorAll(".drug-categories button")) {

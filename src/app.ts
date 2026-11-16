@@ -394,8 +394,8 @@ worker.onmessage = (event: MessageEvent) => {
       const was = broadcasting;
       broadcasting = m.on;
       updateBroadcastButton(m.followers ?? 0, m.error);
-      if (!was && broadcasting && lanInfo?.follow.length) {
-        toast(`授课广播已开启,同学浏览器访问:${lanInfo.follow[0]}`);
+      if (!was && broadcasting && lanInfo?.primaryFollow) {
+        toast(`授课广播已开启,同学浏览器访问:${lanInfo.primaryFollow}`);
       }
       break;
     }
@@ -440,7 +440,7 @@ function roundFrame(f: Frame): Frame {
 }
 
 // 教学机局域网地址(/api/lan 由 serve.mjs 提供;Electron/file 模式为 null)
-let lanInfo: { lan: boolean; addresses: string[]; follow: string[] } | null = null;
+let lanInfo: { lan: boolean; addresses: string[]; follow: string[]; primary?: string | null; primaryFollow?: string | null } | null = null;
 
 function updateBroadcastButton(followers: number, error = false): void {
   const button = $<HTMLButtonElement>('#broadcast-button');
@@ -455,7 +455,18 @@ function updateBroadcastButton(followers: number, error = false): void {
     hint.textContent = '当前未开放局域网：请在教学机以 npm start -- --lan 重新启动,同学才能访问。';
     return;
   }
-  hint.innerHTML = `同学浏览器打开:<code>${lanInfo.follow.join('</code> 或 <code>')}</code>(同一 Wi-Fi,实时跟随)`;
+  if (lanInfo.primaryFollow) {
+    // 路由探测成功:只展示主地址,备用地址收进 ⓘ 图标
+    const others = lanInfo.follow.filter(u => u !== lanInfo.primaryFollow);
+    hint.innerHTML = `同学浏览器打开:<code>${lanInfo.primaryFollow}</code>(同一 Wi-Fi,实时跟随)`
+      + (others.length ? ` <span class="ip-toggle" id="ip-toggle" title="其他可能的地址">?</span><span class="ip-alt hidden">${others.map(u => `<code>${u}</code>`).join('、')}</span>` : '');
+    hint.querySelector('#ip-toggle')?.addEventListener('click', () => {
+      hint.querySelector('.ip-alt')?.classList.toggle('hidden');
+    });
+  } else {
+    // 探测失败(如教室无默认路由):多选一,优先第一个
+    hint.innerHTML = `同学浏览器打开(多选一,优先第一个):${lanInfo.follow.map(u => `<code>${u}</code>`).join('、')}(同一 Wi-Fi,实时跟随)`;
+  }
 }
 
 // ---------------- 操作接线 ----------------
