@@ -561,13 +561,34 @@ const broadcastButton = $("#broadcast-button");
 if (location.protocol.startsWith("http")) {
   broadcastButton.classList.remove("hidden");
   broadcastButton.textContent = "\u5F00\u59CB\u6388\u8BFE\u5E7F\u64AD";
-  broadcastButton.addEventListener("click", () => send(broadcasting ? "broadcast-off" : "broadcast-on"));
+  broadcastButton.addEventListener("click", () => {
+    if (broadcasting) fetch("/api/broadcast-off", { method: "POST" }).catch(() => {
+    });
+    send(broadcasting ? "broadcast-off" : "broadcast-on");
+  });
   fetch("/api/lan", { cache: "no-store" }).then((r) => r.json()).then((d) => {
     lanInfo = d;
     updateBroadcastButton(0);
   }).catch(() => {
   });
 }
+let lastSessionLive = false;
+let liveBannerDismissed = false;
+function pollLiveSession() {
+  if (!location.protocol.startsWith("http")) return;
+  fetch("/api/session", { cache: "no-store" }).then((r) => r.json()).then((data) => {
+    if (lastSessionLive === false && data.live) liveBannerDismissed = false;
+    lastSessionLive = !!data.live;
+    $("#live-banner").classList.toggle("hidden", !(data.live && !broadcasting && !liveBannerDismissed));
+  }).catch(() => {
+  });
+}
+$("#live-banner-close").addEventListener("click", () => {
+  liveBannerDismissed = true;
+  $("#live-banner").classList.add("hidden");
+});
+setInterval(pollLiveSession, 1e4);
+pollLiveSession();
 function openDialog(title, content) {
   $("#dialog-title").textContent = title;
   $("#dialog-content").innerHTML = content;
@@ -593,6 +614,7 @@ const HELP_HTML = `
 </ol>
 <p><strong>\u4E94\u6761\u901A\u9053</strong>\uFF1AABP \u52A8\u8109\u8840\u538B\u3001LVP \u5DE6\u5FC3\u5BA4\u5185\u538B\u3001VBP \u4E2D\u5FC3\u9759\u8109\u538B\u3001HF \u5FC3\u6536\u7F29\u529B\u3001HR \u5FC3\u7387\u3002</p>
 <p><strong>\u6559\u5B66\u63D0\u793A</strong>\uFF1A\u52A8\u8109\u538B\u957F\u65F6\u95F4\u4F4E\u4E8E 20 mmHg \u4F1A\u5BFC\u81F4\u5927\u9F20\u6B7B\u4EA1\uFF1B\u5927\u5242\u91CF\u5730\u9AD8\u8F9B\uFF08\u226510 mg/kg\uFF09\u4F1A\u8BF1\u53D1\u5FC3\u5BA4\u98A4\u52A8\uFF0C\u5FC3\u810F\u505C\u6B62\u5C04\u8840\u3002\u300C\u672A\u77E5\u836F\u300DA\u2013K \u4F9B\u76F2\u68C0\u7EC3\u4E60\u2014\u2014\u5148\u6D4B\u5176\u4F5C\u7528\uFF0C\u518D\u7528\u5DF2\u77E5\u836F\u7269\u9274\u522B\u3002</p>
+<p><strong>\u6388\u8BFE\u5E7F\u64AD</strong>\uFF08\u4EC5\u7F51\u9875\u6A21\u5F0F\uFF09\uFF1A\u6559\u5B66\u673A\u4EE5 <code>npm start -- --lan</code> \u542F\u52A8\u540E\uFF0C\u70B9\u51FB\u300C\u5F00\u59CB\u6388\u8BFE\u5E7F\u64AD\u300D\uFF0C\u754C\u9762\u4F1A\u663E\u793A\u5C40\u57DF\u7F51\u5730\u5740\u2014\u2014\u540C\u5B66\u6D4F\u89C8\u5668\u6253\u5F00\u8BE5\u5730\u5740\u7684 <code>/follow.html</code>\uFF08\u6CE8\u610F\u4E0D\u662F\u4E3B\u9875\uFF09\uFF0C\u5373\u53EF\u5B9E\u65F6\u8DDF\u968F\u89C2\u770B\uFF1B\u5B66\u751F\u5C31\u7B97\u8BEF\u5F00\u4E3B\u9875\uFF0C\u4E5F\u4F1A\u770B\u5230\u300C\u8FDB\u5165\u8DDF\u968F\u9875\u300D\u7684\u63D0\u793A\u6A2A\u5E45\u3002\u505C\u6B62\u5E7F\u64AD\u540E\u8DDF\u968F\u9875\u56DE\u5230\u7B49\u5F85\u72B6\u6001\u3002</p>
 `;
 let settingsHtml = "";
 function renderSettingsDialog() {

@@ -588,13 +588,38 @@ const broadcastButton = $<HTMLButtonElement>('#broadcast-button');
 if (location.protocol.startsWith('http')) {
   broadcastButton.classList.remove('hidden');
   broadcastButton.textContent = '开始授课广播';
-  broadcastButton.addEventListener('click', () => send(broadcasting ? 'broadcast-off' : 'broadcast-on'));
+  broadcastButton.addEventListener('click', () => {
+    // 停止广播时通知服务器清空会话,学生跟随页回到等待空态
+    if (broadcasting) fetch('/api/broadcast-off', { method: 'POST' }).catch(() => {});
+    send(broadcasting ? 'broadcast-off' : 'broadcast-on');
+  });
   // 获取教学机局域网地址,开启广播后提示同学访问地址
   fetch('/api/lan', { cache: 'no-store' })
     .then(r => r.json())
     .then(d => { lanInfo = d; updateBroadcastButton(0); })
     .catch(() => { /* Electron/file 模式无此接口 */ });
 }
+
+// ---- 主页直播横幅:检测到授课广播进行时,引导开错页面的同学进入跟随页 ----
+let lastSessionLive = false;
+let liveBannerDismissed = false;
+function pollLiveSession(): void {
+  if (!location.protocol.startsWith('http')) return;
+  fetch('/api/session', { cache: 'no-store' })
+    .then(r => r.json())
+    .then(data => {
+      if (lastSessionLive === false && data.live) liveBannerDismissed = false;
+      lastSessionLive = !!data.live;
+      $('#live-banner').classList.toggle('hidden', !(data.live && !broadcasting && !liveBannerDismissed));
+    })
+    .catch(() => { /* Electron/file 模式无此接口 */ });
+}
+$('#live-banner-close').addEventListener('click', () => {
+  liveBannerDismissed = true;
+  $('#live-banner').classList.add('hidden');
+});
+setInterval(pollLiveSession, 10000);
+pollLiveSession();
 
 // ---- 对话框 ----
 function openDialog(title: string, content: string): void {
@@ -623,6 +648,7 @@ const HELP_HTML = `
 </ol>
 <p><strong>五条通道</strong>：ABP 动脉血压、LVP 左心室内压、VBP 中心静脉压、HF 心收缩力、HR 心率。</p>
 <p><strong>教学提示</strong>：动脉压长时间低于 20 mmHg 会导致大鼠死亡；大剂量地高辛（≥10 mg/kg）会诱发心室颤动，心脏停止射血。「未知药」A–K 供盲检练习——先测其作用，再用已知药物鉴别。</p>
+<p><strong>授课广播</strong>（仅网页模式）：教学机以 <code>npm start -- --lan</code> 启动后，点击「开始授课广播」，界面会显示局域网地址——同学浏览器打开该地址的 <code>/follow.html</code>（注意不是主页），即可实时跟随观看；学生就算误开主页，也会看到「进入跟随页」的提示横幅。停止广播后跟随页回到等待状态。</p>
 `;
 
 let settingsHtml = '';

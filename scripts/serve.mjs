@@ -49,6 +49,7 @@ const broadcast = {
   frames: [],
   events: [],
   updatedAt: 0,
+  live: false,
   followers: new Set()
 };
 
@@ -77,6 +78,7 @@ function handleBroadcast(req, res, body) {
   } else {
     res.writeHead(400); res.end('Unknown type'); return;
   }
+  broadcast.live = true;
   broadcast.updatedAt = Date.now();
   broadcastChunk(message);
   res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -109,6 +111,18 @@ const server = http.createServer(async (req, res) => {
     req.on('end', () => handleBroadcast(req, res, body));
     return;
   }
+  // 老师端停止广播:清空会话,学生跟随页回到「等待老师」空态
+  if (pathname === '/api/broadcast-off' && req.method === 'POST') {
+    broadcast.live = false;
+    broadcast.state = null;
+    broadcast.frames = [];
+    broadcast.events = [];
+    broadcast.updatedAt = Date.now();
+    broadcastChunk({ type: 'off' });
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ ok: true }));
+    return;
+  }
   if (pathname === '/api/follow' && req.method === 'GET') {
     handleFollow(res);
     return;
@@ -134,7 +148,7 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/api/session' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify({
-      live: broadcast.followers.size >= 0 && !!broadcast.state,
+      live: broadcast.live && !!broadcast.state,
       followers: broadcast.followers.size,
       updatedAt: broadcast.updatedAt,
       tissue: broadcast.state?.tissue ?? null

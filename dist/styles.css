@@ -322,3 +322,6 @@ dialog::backdrop { background: #0006; }
 .ip-toggle:hover { background: var(--accent-soft); }
 .ip-alt { color: var(--muted); }
 .ip-alt code { color: var(--muted); }
+.live-banner { display: flex; align-items: center; gap: 14px; margin: 0 0 14px; padding: 10px 14px; border: 1px solid #9fc3e8; border-left: 4px solid var(--accent); background: #eef4fb; color: #202428; font-size: 13px; }
+.live-banner a { text-decoration: none; }
+.live-banner-close { margin-left: auto; border: none; background: none; color: #606970; font-size: 16px; cursor: pointer; padding: 2px 6px; }
