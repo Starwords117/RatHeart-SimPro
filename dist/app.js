@@ -376,10 +376,15 @@ worker.onmessage = (event) => {
       if (m.frames.length || m.events.length || m.replace) renderEvents();
       dirty = true;
       break;
-    case "broadcast":
+    case "broadcast": {
+      const was = broadcasting;
       broadcasting = m.on;
       updateBroadcastButton(m.followers ?? 0, m.error);
+      if (!was && broadcasting && lanInfo?.follow.length) {
+        toast(`\u6388\u8BFE\u5E7F\u64AD\u5DF2\u5F00\u542F,\u540C\u5B66\u6D4F\u89C8\u5668\u8BBF\u95EE:${lanInfo.follow[0]}`);
+      }
       break;
+    }
     case "snapshot": {
       const snapshot = m.snapshot;
       if (m.purpose === "autosave") {
@@ -420,9 +425,25 @@ worker.onmessage = (event) => {
 function roundFrame(f) {
   return { t: Math.round(f.t * 1e5) / 1e5, abp: Math.round(f.abp * 1e3) / 1e3, lvp: Math.round(f.lvp * 1e3) / 1e3, vbp: Math.round(f.vbp * 1e3) / 1e3, hf: Math.round(f.hf * 1e3) / 1e3, hr: Math.round(f.hr * 100) / 100 };
 }
+let lanInfo = null;
 function updateBroadcastButton(followers, error = false) {
   const button = $("#broadcast-button");
   button.textContent = broadcasting ? error ? "\u5E7F\u64AD\u4E2D\u65AD\uFF08\u5DF2\u505C\u6B62\uFF09" : `\u505C\u6B62\u6388\u8BFE\u5E7F\u64AD \xB7 ${followers} \u4EBA\u8DDF\u968F` : "\u5F00\u59CB\u6388\u8BFE\u5E7F\u64AD";
+  const hint = $("#broadcast-hint");
+  if (!broadcasting || error) {
+    hint.classList.add("hidden");
+    return;
+  }
+  hint.classList.remove("hidden");
+  if (!lanInfo) {
+    hint.textContent = "\u6B63\u5728\u83B7\u53D6\u5C40\u57DF\u7F51\u5730\u5740\u2026";
+    return;
+  }
+  if (!lanInfo.lan || !lanInfo.follow.length) {
+    hint.textContent = "\u5F53\u524D\u672A\u5F00\u653E\u5C40\u57DF\u7F51\uFF1A\u8BF7\u5728\u6559\u5B66\u673A\u4EE5 npm start -- --lan \u91CD\u65B0\u542F\u52A8,\u540C\u5B66\u624D\u80FD\u8BBF\u95EE\u3002";
+    return;
+  }
+  hint.innerHTML = `\u540C\u5B66\u6D4F\u89C8\u5668\u6253\u5F00:<code>${lanInfo.follow.join("</code> \u6216 <code>")}</code>(\u540C\u4E00 Wi-Fi,\u5B9E\u65F6\u8DDF\u968F)`;
 }
 $("#drug-select").addEventListener("change", updateDrug);
 for (const button of document.querySelectorAll(".drug-categories button")) {
@@ -533,6 +554,11 @@ if (location.protocol.startsWith("http")) {
   broadcastButton.classList.remove("hidden");
   broadcastButton.textContent = "\u5F00\u59CB\u6388\u8BFE\u5E7F\u64AD";
   broadcastButton.addEventListener("click", () => send(broadcasting ? "broadcast-off" : "broadcast-on"));
+  fetch("/api/lan", { cache: "no-store" }).then((r) => r.json()).then((d) => {
+    lanInfo = d;
+    updateBroadcastButton(0);
+  }).catch(() => {
+  });
 }
 function openDialog(title, content) {
   $("#dialog-title").textContent = title;

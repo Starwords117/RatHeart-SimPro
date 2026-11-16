@@ -390,10 +390,15 @@ worker.onmessage = (event: MessageEvent) => {
       if (m.frames.length || m.events.length || m.replace) renderEvents();
       dirty = true;
       break;
-    case 'broadcast':
+    case 'broadcast': {
+      const was = broadcasting;
       broadcasting = m.on;
       updateBroadcastButton(m.followers ?? 0, m.error);
+      if (!was && broadcasting && lanInfo?.follow.length) {
+        toast(`授课广播已开启,同学浏览器访问:${lanInfo.follow[0]}`);
+      }
       break;
+    }
     case 'snapshot': {
       const snapshot = m.snapshot as Snapshot;
       if (m.purpose === 'autosave') {
@@ -434,11 +439,23 @@ function roundFrame(f: Frame): Frame {
   return { t: Math.round(f.t * 1e5) / 1e5, abp: Math.round(f.abp * 1000) / 1000, lvp: Math.round(f.lvp * 1000) / 1000, vbp: Math.round(f.vbp * 1000) / 1000, hf: Math.round(f.hf * 1000) / 1000, hr: Math.round(f.hr * 100) / 100 };
 }
 
+// 教学机局域网地址(/api/lan 由 serve.mjs 提供;Electron/file 模式为 null)
+let lanInfo: { lan: boolean; addresses: string[]; follow: string[] } | null = null;
+
 function updateBroadcastButton(followers: number, error = false): void {
   const button = $<HTMLButtonElement>('#broadcast-button');
   button.textContent = broadcasting
     ? (error ? '广播中断（已停止）' : `停止授课广播 · ${followers} 人跟随`)
     : '开始授课广播';
+  const hint = $('#broadcast-hint');
+  if (!broadcasting || error) { hint.classList.add('hidden'); return; }
+  hint.classList.remove('hidden');
+  if (!lanInfo) { hint.textContent = '正在获取局域网地址…'; return; }
+  if (!lanInfo.lan || !lanInfo.follow.length) {
+    hint.textContent = '当前未开放局域网：请在教学机以 npm start -- --lan 重新启动,同学才能访问。';
+    return;
+  }
+  hint.innerHTML = `同学浏览器打开:<code>${lanInfo.follow.join('</code> 或 <code>')}</code>(同一 Wi-Fi,实时跟随)`;
 }
 
 // ---------------- 操作接线 ----------------
@@ -561,6 +578,11 @@ if (location.protocol.startsWith('http')) {
   broadcastButton.classList.remove('hidden');
   broadcastButton.textContent = '开始授课广播';
   broadcastButton.addEventListener('click', () => send(broadcasting ? 'broadcast-off' : 'broadcast-on'));
+  // 获取教学机局域网地址,开启广播后提示同学访问地址
+  fetch('/api/lan', { cache: 'no-store' })
+    .then(r => r.json())
+    .then(d => { lanInfo = d; updateBroadcastButton(0); })
+    .catch(() => { /* Electron/file 模式无此接口 */ });
 }
 
 // ---- 对话框 ----

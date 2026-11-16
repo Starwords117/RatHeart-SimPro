@@ -128,6 +128,21 @@ const server = http.createServer(async (req, res) => {
     }));
     return;
   }
+  // 局域网地址:前端据此提示学生访问地址(需要 --lan 才真正对外开放)
+  if (pathname === '/api/lan' && req.method === 'GET') {
+    const addresses = [];
+    for (const list of Object.values(os.networkInterfaces())) {
+      for (const net of list ?? []) {
+        if (net.family === 'IPv4' && !net.internal) addresses.push(`http://${net.address}:${port}`);
+      }
+    }
+    // 教学 Wi-Fi 网段排前,虚拟/桥接网卡地址殿后
+    const rank = s => (s.includes('192.168.') ? 0 : s.includes('10.') ? 1 : s.includes('172.') ? 2 : 3);
+    addresses.sort((a, b) => rank(a) - rank(b));
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ lan: openLan, port, addresses, follow: addresses.map(a => `${a}/follow.html`) }));
+    return;
+  }
 
   // ---- 静态文件 ----
   const relative = path.posix.normalize('/' + pathname).replace(/^\/+/, '');

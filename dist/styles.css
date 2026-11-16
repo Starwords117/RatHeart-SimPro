@@ -316,3 +316,5 @@ dialog::backdrop { background: #0006; }
   .page { max-width: 1840px; }
   .plot-wrap { height: 640px; }
 }
+.broadcast-hint { margin: 6px 16px 0; color: var(--accent); font-size: 12px; line-height: 1.7; user-select: all; }
+.broadcast-hint code { font-family: Consolas, monospace; }

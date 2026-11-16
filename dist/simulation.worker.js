@@ -125,8 +125,10 @@ scope.onmessage = (event) => {
       lastBroadcast = 0;
       broadcastNow();
       break;
+    // 关闭广播需回执,否则界面按钮状态不翻转
     case "broadcast-off":
       broadcastOn = false;
+      scope.postMessage({ type: "broadcast", on: false, followers: 0 });
       break;
   }
 };

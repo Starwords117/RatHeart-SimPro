@@ -73,7 +73,8 @@ scope.onmessage = (event: MessageEvent) => {
       } catch (error) { console.error(error); scope.postMessage({ type: 'file-error' }); }
       break;
     case 'broadcast-on': broadcastOn = true; broadcastSeq += 1; bSentFrames = 0; bSentEvents = 0; broadcastFull = true; lastBroadcast = 0; broadcastNow(); break;
-    case 'broadcast-off': broadcastOn = false; break;
+    // 关闭广播需回执,否则界面按钮状态不翻转
+    case 'broadcast-off': broadcastOn = false; scope.postMessage({ type: 'broadcast', on: false, followers: 0 }); break;
   }
 };
 
