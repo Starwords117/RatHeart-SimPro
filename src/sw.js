@@ -1,6 +1,6 @@
 /* 大鼠心血管实验台 Service Worker：预缓存应用外壳，断网可继续使用已加载的实验。
  * 实验数据保存在 localStorage，不经过网络；缓存策略为 stale-while-revalidate。 */
-const CACHE = 'ratheart-simpro-v0.1.3';
+const CACHE = 'ratheart-simpro-v0.1.3-nf';
 const SHELL = [
   './',
   './index.html',
@@ -43,6 +43,22 @@ self.addEventListener('fetch', event => {
           return response;
         })
         .catch(() => caches.match('./index.html'))
+    );
+    return;
+  }
+  // 应用代码(html/js/css)网络优先:在线时一次刷新即拿到最新版本,
+  // 离线回退缓存;图标等静态资源保持 stale-while-revalidate
+  if (/\.(html|js|css|webmanifest)(\?|$)/.test(new URL(request.url).pathname)) {
+    event.respondWith(
+      fetch(request)
+        .then(response => {
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE).then(cache => cache.put(request, copy));
+          }
+          return response;
+        })
+        .catch(() => caches.match(request))
     );
     return;
   }

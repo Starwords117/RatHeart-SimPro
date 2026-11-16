@@ -12,12 +12,25 @@ let sentFrames = 0, sentEvents = 0;
 let last = performance.now(), budget = 0;
 
 // Online 授课广播
+// 窗口化推送:只发最近 18000 帧窗口(与服务器窗口一致),避免恢复长实验后
+// 整条 trace(可达十几 MB)超过服务器 8MB 上限被销毁——那会导致学生端
+// 只收到 state 而收不到帧/事件。bSentFrames 记录已推送到的绝对下标;
+// 教师重建实验(下标回退)或未发帧被窗口挤出时,自动改推全量窗口并递增 seq
+// (学生端 seq 不匹配 → 重置,拿到新窗口)。
+const BROADCAST_WINDOW = 18000;
 let broadcastOn = false, broadcastSeq = 0, bSentFrames = 0, bSentEvents = 0, lastBroadcast = 0, broadcastFull = false;
 function broadcastNow(): void {
-  const payload = broadcastFull
-    ? { type: 'full', seq: broadcastSeq, state: experiment.state, frames: experiment.trace, events: experiment.events }
-    : { type: 'chunk', seq: broadcastSeq, state: experiment.state, frames: experiment.trace.slice(bSentFrames), events: experiment.events.slice(bSentEvents) };
-  bSentFrames = experiment.trace.length; bSentEvents = experiment.events.length;
+  const traceLen = experiment.trace.length;
+  const windowStart = Math.max(0, traceLen - BROADCAST_WINDOW);
+  const needFull = broadcastFull || bSentFrames > traceLen || bSentFrames < windowStart;
+  let payload;
+  if (needFull) {
+    payload = { type: 'full', seq: ++broadcastSeq, state: experiment.state, frames: experiment.trace.slice(windowStart), events: experiment.events };
+    bSentFrames = traceLen; bSentEvents = experiment.events.length;
+  } else {
+    payload = { type: 'chunk', seq: broadcastSeq, state: experiment.state, frames: experiment.trace.slice(bSentFrames), events: experiment.events.slice(bSentEvents) };
+    bSentFrames = traceLen; bSentEvents = experiment.events.length;
+  }
   broadcastFull = false;
   scope.fetch('/api/broadcast', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) })
     .then((r: any) => r.json())

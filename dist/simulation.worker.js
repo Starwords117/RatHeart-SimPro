@@ -3,11 +3,22 @@ const scope = globalThis;
 let experiment = new Experiment(true);
 let sentFrames = 0, sentEvents = 0;
 let last = performance.now(), budget = 0;
+const BROADCAST_WINDOW = 18e3;
 let broadcastOn = false, broadcastSeq = 0, bSentFrames = 0, bSentEvents = 0, lastBroadcast = 0, broadcastFull = false;
 function broadcastNow() {
-  const payload = broadcastFull ? { type: "full", seq: broadcastSeq, state: experiment.state, frames: experiment.trace, events: experiment.events } : { type: "chunk", seq: broadcastSeq, state: experiment.state, frames: experiment.trace.slice(bSentFrames), events: experiment.events.slice(bSentEvents) };
-  bSentFrames = experiment.trace.length;
-  bSentEvents = experiment.events.length;
+  const traceLen = experiment.trace.length;
+  const windowStart = Math.max(0, traceLen - BROADCAST_WINDOW);
+  const needFull = broadcastFull || bSentFrames > traceLen || bSentFrames < windowStart;
+  let payload;
+  if (needFull) {
+    payload = { type: "full", seq: ++broadcastSeq, state: experiment.state, frames: experiment.trace.slice(windowStart), events: experiment.events };
+    bSentFrames = traceLen;
+    bSentEvents = experiment.events.length;
+  } else {
+    payload = { type: "chunk", seq: broadcastSeq, state: experiment.state, frames: experiment.trace.slice(bSentFrames), events: experiment.events.slice(bSentEvents) };
+    bSentFrames = traceLen;
+    bSentEvents = experiment.events.length;
+  }
   broadcastFull = false;
   scope.fetch("/api/broadcast", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) }).then((r) => r.json()).then((d) => scope.postMessage({ type: "broadcast", on: broadcastOn, followers: d.followers ?? 0 })).catch(() => {
     broadcastOn = false;

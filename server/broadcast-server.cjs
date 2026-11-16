@@ -130,7 +130,8 @@ function createBroadcastServer({ root, port, openLan = true }) {
         frames: reset ? broadcast.frames : broadcast.frames.slice(f),
         events: reset ? broadcast.events : broadcast.events.slice(e),
         totalF: broadcast.frames.length,
-        totalE: broadcast.events.length
+        totalE: broadcast.events.length,
+        updatedAt: broadcast.updatedAt
       }));
       return;
     }

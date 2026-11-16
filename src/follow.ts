@@ -25,12 +25,16 @@ function setStatus(text: string, live: boolean): void {
   $('#follow-live').classList.toggle('running', live);
   $('#follow-live2').classList.toggle('running', live);
 }
+// 仿真时间本地走表:每次收到广播状态即重设基准,渲染 tick 间本地插值;
+// 教师暂停(state.running=false)或广播停止(收到空状态)时冻结
+let timeBase = 0, timeAt = 0, timeFrozen = true;
 function renderHeader(): void {
   if (!state) return;
   $('#chart-model').textContent = state.pithed ? '去脑大鼠' : '正常大鼠';
   $('#abp-value').innerHTML = `${state.art?.meanP > 0 ? state.art.meanP.toFixed(1) : '–'}<small>mmHg</small>`;
   $('#hr-value').innerHTML = `${state.heart?.rate > 1 ? Math.round(state.heart.rate) : '–'}<small>bpm</small>`;
-  $('#time-value').textContent = time(state.time ?? 0, true);
+  const shown = timeFrozen || !state.running ? timeBase : timeBase + (performance.now() - timeAt) / 1000;
+  $('#time-value').textContent = time(shown, true);
   $('#last-operation').textContent = events.at(-1)?.text ?? '—';
 }
 function renderEvents(): void {
@@ -62,7 +66,7 @@ function drawChart(): void {
   // 按下标开窗(取最近 N 个子样本):服务器只保留最近 18000 帧,
   // 帧的 t 是绝对时间,不能再用 时间/采样间隔 反推下标
   const windowSamples = Number(($<HTMLSelectElement>('#window-select')).value);
-  const end = frames.length;
+  const end = Math.min(historyEnd ?? frames.length, frames.length);
   const start = windowSamples > 0 ? Math.max(0, end - windowSamples) : 0;
   if (end - start < 2) return;
 
@@ -140,9 +144,28 @@ function drawChart(): void {
 
 $('#window-select').addEventListener('change', () => { dirty = true; });
 new ResizeObserver(() => { dirty = true; }).observe($('#plot-wrap'));
+
+// 回看进度条:拖动查看整条曲线,「回到最新」恢复直播视图
+let historyEnd: number | null = null;
+const slider = $<HTMLInputElement>('#history-position');
+slider.addEventListener('input', () => { historyEnd = Number(slider.value); dirty = true; });
+$('#latest-button').addEventListener('click', () => { historyEnd = null; dirty = true; });
+function renderHistorySlider(): void {
+  const wrap = $('#history-scroll');
+  const windowSamples = Number(($<HTMLSelectElement>('#window-select')).value);
+  const show = frames.length > Math.max(windowSamples, 320);
+  wrap.classList.toggle('hidden', !show);
+  if (!show) { historyEnd = null; return; }
+  if (document.activeElement !== slider) {
+    slider.max = String(frames.length - 1);
+    if (historyEnd === null) slider.value = slider.max;
+  }
+}
+
 // 跟随页可能处于后台标签/低频渲染环境：用固定间隔驱动，不依赖 requestAnimationFrame
 setInterval(() => {
   try {
+    renderHistorySlider();
     if (dirty) { renderHeader(); renderEvents(); drawChart(); dirty = false; }
   } catch (error) {
     (window as any).__followError = String((error as Error)?.stack ?? error);
@@ -151,6 +174,14 @@ setInterval(() => {
 
 function applyUpdate(reset: boolean, message: any): void {
   state = message.state ?? state;
+  if (message.state) {
+    // 广播状态到达即重设本地走表基准;教师暂停时不插值
+    timeBase = message.state.time ?? timeBase;
+    timeAt = performance.now();
+    timeFrozen = !message.state.running;
+  } else {
+    timeFrozen = true;   // 广播停止:冻结在最后时刻
+  }
   if (reset) { frames = message.frames ?? []; events = message.events ?? []; lastRenderedEventCount = -1; }
   else {
     if (message.frames?.length) frames.push(...message.frames);
@@ -180,7 +211,13 @@ async function poll(): Promise<void> {
     seenSeq = data.seq;
     applyUpdate(!!data.reset || !data.state, data);
     sentF = data.totalF; sentE = data.totalE;
-    if (data.state) { setStatus('实时跟随老师端', true); setPollInterval(50); }
+    if (data.state) {
+      // 教师端推送陈旧(>10s 未更新,如页面崩溃/网络中断)→ 判定中断并冻结走表
+      const stale = Date.now() - (data.updatedAt ?? 0) > 10000;
+      if (stale) timeFrozen = true;
+      setStatus(stale ? '教师端连接已中断，等待恢复…' : '实时跟随老师端', !stale);
+      setPollInterval(stale ? 1500 : 50);
+    }
     else { setStatus('老师端尚未开始广播，等待中…', false); setPollInterval(1500); }
   } catch {
     setStatus('连接中断，自动重试中…', false);

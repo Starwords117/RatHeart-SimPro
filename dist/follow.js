@@ -20,12 +20,14 @@ function setStatus(text, live) {
   $("#follow-live").classList.toggle("running", live);
   $("#follow-live2").classList.toggle("running", live);
 }
+let timeBase = 0, timeAt = 0, timeFrozen = true;
 function renderHeader() {
   if (!state) return;
   $("#chart-model").textContent = state.pithed ? "\u53BB\u8111\u5927\u9F20" : "\u6B63\u5E38\u5927\u9F20";
   $("#abp-value").innerHTML = `${state.art?.meanP > 0 ? state.art.meanP.toFixed(1) : "\u2013"}<small>mmHg</small>`;
   $("#hr-value").innerHTML = `${state.heart?.rate > 1 ? Math.round(state.heart.rate) : "\u2013"}<small>bpm</small>`;
-  $("#time-value").textContent = time(state.time ?? 0, true);
+  const shown = timeFrozen || !state.running ? timeBase : timeBase + (performance.now() - timeAt) / 1e3;
+  $("#time-value").textContent = time(shown, true);
   $("#last-operation").textContent = events.at(-1)?.text ?? "\u2014";
 }
 function renderEvents() {
@@ -65,7 +67,7 @@ function drawChart() {
   $("#plot-empty").classList.toggle("hidden", frames.length > 1);
   if (frames.length < 2) return;
   const windowSamples = Number($("#window-select").value);
-  const end = frames.length;
+  const end = Math.min(historyEnd ?? frames.length, frames.length);
   const start = windowSamples > 0 ? Math.max(0, end - windowSamples) : 0;
   if (end - start < 2) return;
   const left = width < 480 ? 42 : 46, right = 12, top = 8, bottom = 30;
@@ -172,8 +174,33 @@ $("#window-select").addEventListener("change", () => {
 new ResizeObserver(() => {
   dirty = true;
 }).observe($("#plot-wrap"));
+let historyEnd = null;
+const slider = $("#history-position");
+slider.addEventListener("input", () => {
+  historyEnd = Number(slider.value);
+  dirty = true;
+});
+$("#latest-button").addEventListener("click", () => {
+  historyEnd = null;
+  dirty = true;
+});
+function renderHistorySlider() {
+  const wrap = $("#history-scroll");
+  const windowSamples = Number($("#window-select").value);
+  const show = frames.length > Math.max(windowSamples, 320);
+  wrap.classList.toggle("hidden", !show);
+  if (!show) {
+    historyEnd = null;
+    return;
+  }
+  if (document.activeElement !== slider) {
+    slider.max = String(frames.length - 1);
+    if (historyEnd === null) slider.value = slider.max;
+  }
+}
 setInterval(() => {
   try {
+    renderHistorySlider();
     if (dirty) {
       renderHeader();
       renderEvents();
@@ -186,6 +213,13 @@ setInterval(() => {
 }, 100);
 function applyUpdate(reset, message) {
   state = message.state ?? state;
+  if (message.state) {
+    timeBase = message.state.time ?? timeBase;
+    timeAt = performance.now();
+    timeFrozen = !message.state.running;
+  } else {
+    timeFrozen = true;
+  }
   if (reset) {
     frames = message.frames ?? [];
     events = message.events ?? [];
@@ -217,8 +251,10 @@ async function poll() {
     sentF = data.totalF;
     sentE = data.totalE;
     if (data.state) {
-      setStatus("\u5B9E\u65F6\u8DDF\u968F\u8001\u5E08\u7AEF", true);
-      setPollInterval(50);
+      const stale = Date.now() - (data.updatedAt ?? 0) > 1e4;
+      if (stale) timeFrozen = true;
+      setStatus(stale ? "\u6559\u5E08\u7AEF\u8FDE\u63A5\u5DF2\u4E2D\u65AD\uFF0C\u7B49\u5F85\u6062\u590D\u2026" : "\u5B9E\u65F6\u8DDF\u968F\u8001\u5E08\u7AEF", !stale);
+      setPollInterval(stale ? 1500 : 50);
     } else {
       setStatus("\u8001\u5E08\u7AEF\u5C1A\u672A\u5F00\u59CB\u5E7F\u64AD\uFF0C\u7B49\u5F85\u4E2D\u2026", false);
       setPollInterval(1500);

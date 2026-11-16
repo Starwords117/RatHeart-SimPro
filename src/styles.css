@@ -329,3 +329,5 @@ dialog::backdrop { background: #0006; }
 .events-card { display: flex; flex-direction: column; }
 .events-card .card-title { flex: none; }
 .events-card .event-list { flex: 1; min-height: 120px; height: auto; }
+/* 跟随页:实验记录列表内边距(与实验台观感一致) */
+.follow-events .event-list { padding: 6px 14px 10px; }
