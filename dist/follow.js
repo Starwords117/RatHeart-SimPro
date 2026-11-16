@@ -76,12 +76,14 @@ function drawChart() {
   const bandH = ph / CHANNEL_KEYS.length;
   const stride = Math.max(1, Math.floor((end - start) / (pw * 2)));
   const t0 = frames[start].t, t1 = frames[end - 1].t;
+  const CHART_KINDS = /* @__PURE__ */ new Set(["dose", "stimulus", "death", "import"]);
   ctx.save();
   ctx.beginPath();
   ctx.rect(left, top, pw, ph);
   ctx.clip();
   let lastLabelX = -1e9, labelRow = 0;
   for (const event of events) {
+    if (!CHART_KINDS.has(event.kind)) continue;
     if (event.t < t0 || event.t > t1) continue;
     const xx = left + (event.t - t0) / (t1 - t0) * pw;
     ctx.strokeStyle = "#c6cdd3";

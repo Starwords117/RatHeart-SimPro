@@ -161,7 +161,9 @@ function drawChart() {
     return t12 > t02 ? left + (t - t02) / (t12 - t02) * plotW : left;
   };
   let labelRow = 0, lastLabelX = -1e9;
+  const CHART_KINDS = /* @__PURE__ */ new Set(["dose", "stimulus", "death", "import"]);
   for (const event of events) {
+    if (!CHART_KINDS.has(event.kind)) continue;
     if (event.t < tAt(start) || event.t > tAt(end - 1)) continue;
     const x = xAt(event.t);
     context.strokeStyle = "#c6cdd3";
@@ -171,7 +173,7 @@ function drawChart() {
     context.lineTo(x, top + plotH);
     context.stroke();
     context.setLineDash([]);
-    if (x - lastLabelX > 72 || labelRow === 1) {
+    if (x - lastLabelX > 72) {
       context.fillStyle = EVENT_COLORS[event.kind] ?? "#78818a";
       context.font = "11px Consolas, monospace";
       context.textAlign = "left";
