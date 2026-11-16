@@ -73,7 +73,8 @@ function drawChart() {
   if (end - start < 2) return;
   const left = width < 480 ? 42 : 46, right = 12, top = 8, bottom = 30;
   const pw = width - left - right, ph = height - top - bottom;
-  const bandH = ph / CHANNEL_KEYS.length;
+  const bandGap = 12;
+  const bandH = (ph - bandGap * (CHANNEL_KEYS.length - 1)) / CHANNEL_KEYS.length;
   const stride = Math.max(1, Math.floor((end - start) / (pw * 2)));
   const t0 = frames[start].t, t1 = frames[end - 1].t;
   const CHART_KINDS = /* @__PURE__ */ new Set(["dose", "stimulus", "death", "import"]);
@@ -105,7 +106,7 @@ function drawChart() {
   }
   ctx.restore();
   CHANNEL_KEYS.forEach((key, ch) => {
-    const bandTop = top + ch * bandH;
+    const bandTop = top + ch * (bandH + bandGap);
     let ymax = CHANNEL_DEFAULT_MAX[key];
     for (let i = start; i < end; i += stride) if (frames[i][key] > ymax) ymax = frames[i][key] * 1.15;
     if (key === "hr") ymax = Math.max(ymax, 400);

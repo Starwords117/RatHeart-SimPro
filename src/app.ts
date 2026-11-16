@@ -176,7 +176,9 @@ function drawChart(): void {
 
   const left = 46, right = 12, top = 8, bottom = 30;
   const plotW = width - left - right, plotH = height - top - bottom;
-  const bandH = plotH / CHANNEL_KEYS.length;
+  // 通道带之间留 14px 间隔,避免上一带底部刻度与下一带量程/标题重叠
+  const bandGap = 14;
+  const bandH = (plotH - bandGap * (CHANNEL_KEYS.length - 1)) / CHANNEL_KEYS.length;
   currentRange = { start, end, left, right, top, bottom, width, height };
   const visibleCount = end - start;
   const stride = Math.max(1, Math.floor(visibleCount / (plotW * 2)));
@@ -217,7 +219,7 @@ function drawChart(): void {
 
   // 五个通道带
   CHANNEL_KEYS.forEach((key, ch) => {
-    const bandTop = top + ch * bandH;
+    const bandTop = top + ch * (bandH + bandGap);
     let ymax = CHANNEL_DEFAULT_MAX[key];
     for (let i = start; i < end; i += stride) {
       const v = frames[i][key];

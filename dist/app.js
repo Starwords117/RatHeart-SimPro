@@ -147,7 +147,8 @@ function drawChart() {
   if (frames.length < 2 || end - start < 2) return;
   const left = 46, right = 12, top = 8, bottom = 30;
   const plotW = width - left - right, plotH = height - top - bottom;
-  const bandH = plotH / CHANNEL_KEYS.length;
+  const bandGap = 14;
+  const bandH = (plotH - bandGap * (CHANNEL_KEYS.length - 1)) / CHANNEL_KEYS.length;
   currentRange = { start, end, left, right, top, bottom, width, height };
   const visibleCount = end - start;
   const stride = Math.max(1, Math.floor(visibleCount / (plotW * 2)));
@@ -184,7 +185,7 @@ function drawChart() {
   }
   context.restore();
   CHANNEL_KEYS.forEach((key, ch) => {
-    const bandTop = top + ch * bandH;
+    const bandTop = top + ch * (bandH + bandGap);
     let ymax = CHANNEL_DEFAULT_MAX[key];
     for (let i = start; i < end; i += stride) {
       const v = frames[i][key];
