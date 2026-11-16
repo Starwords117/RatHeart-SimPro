@@ -75,6 +75,18 @@ function createBroadcastServer({ root, port, openLan = true }) {
     res.end(JSON.stringify({ ok: true, followers: broadcast.followers.size }));
   }
 
+  // 教师页直接关闭/刷新(未点停止)时,广播会话会残留:
+  // 无跟随者且超过 60s 无更新 → 清空,学生端回到「等待老师」空态
+  const gcTimer = setInterval(() => {
+    if (broadcast.live && broadcast.followers.size === 0 && Date.now() - broadcast.updatedAt > 60000) {
+      broadcast.live = false;
+      broadcast.state = null;
+      broadcast.frames = [];
+      broadcast.events = [];
+      broadcast.seq += 1;
+    }
+  }, 30000);
+
   function handleFollow(res) {
     res.writeHead(200, {
       'Content-Type': 'text/event-stream; charset=utf-8',
@@ -183,6 +195,7 @@ function createBroadcastServer({ root, port, openLan = true }) {
     }
   });
 
+  server.on('close', () => clearInterval(gcTimer));
   return server;
 }
 
