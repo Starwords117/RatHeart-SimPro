@@ -68,7 +68,7 @@ function drawChart(): void {
 
   const left = width < 480 ? 42 : 46, right = 12, top = 8, bottom = 30;
   const pw = width - left - right, ph = height - top - bottom;
-  const bandGap = 12;
+  const bandGap = 18;
   const bandH = (ph - bandGap * (CHANNEL_KEYS.length - 1)) / CHANNEL_KEYS.length;
   const stride = Math.max(1, Math.floor((end - start) / (pw * 2)));
   const t0 = frames[start].t, t1 = frames[end - 1].t;
@@ -102,8 +102,11 @@ function drawChart(): void {
     ctx.font = '10px Consolas, monospace'; ctx.textAlign = 'right';
     for (let g = 0; g <= 4; g++) {
       const yy = bandTop + (g / 4) * bandH;
-      ctx.strokeStyle = g === 0 ? '#aab3bc' : '#e7eaee';
+      const isEdge = g === 0 || g === 4;
+      ctx.strokeStyle = isEdge ? '#aab3bc' : '#e7eaee';
+      ctx.lineWidth = isEdge ? 1.6 : 1;
       ctx.beginPath(); ctx.moveTo(left, yy); ctx.lineTo(width - right, yy); ctx.stroke();
+      ctx.lineWidth = 1;
       const value = ymax - (g / 4) * (ymax - ymin);
       ctx.fillStyle = '#626d77';
       ctx.fillText(value.toFixed(value % 1 === 0 || Math.abs(value) >= 100 ? 0 : 1), left - 4, yy + 3);

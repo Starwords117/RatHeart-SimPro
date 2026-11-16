@@ -147,7 +147,7 @@ function drawChart() {
   if (frames.length < 2 || end - start < 2) return;
   const left = 46, right = 12, top = 8, bottom = 30;
   const plotW = width - left - right, plotH = height - top - bottom;
-  const bandGap = 14;
+  const bandGap = 18;
   const bandH = (plotH - bandGap * (CHANNEL_KEYS.length - 1)) / CHANNEL_KEYS.length;
   currentRange = { start, end, left, right, top, bottom, width, height };
   const visibleCount = end - start;
@@ -198,11 +198,14 @@ function drawChart() {
     context.textAlign = "right";
     for (let g = 0; g <= 4; g++) {
       const y = bandTop + g / 4 * bandH;
-      context.strokeStyle = g === 0 ? GRID_BASE : GRID;
+      const isEdge = g === 0 || g === 4;
+      context.strokeStyle = isEdge ? GRID_BASE : GRID;
+      context.lineWidth = isEdge ? 1.6 : 1;
       context.beginPath();
       context.moveTo(left, y);
       context.lineTo(width - right, y);
       context.stroke();
+      context.lineWidth = 1;
       const value = ymax - g / 4 * (ymax - ymin);
       context.fillStyle = MUTED;
       context.fillText(Math.abs(value) >= 100 ? value.toFixed(0) : value.toFixed(value % 1 === 0 ? 0 : 1), left - 4, y + 3);

@@ -177,7 +177,7 @@ function drawChart(): void {
   const left = 46, right = 12, top = 8, bottom = 30;
   const plotW = width - left - right, plotH = height - top - bottom;
   // 通道带之间留 14px 间隔,避免上一带底部刻度与下一带量程/标题重叠
-  const bandGap = 14;
+  const bandGap = 18;
   const bandH = (plotH - bandGap * (CHANNEL_KEYS.length - 1)) / CHANNEL_KEYS.length;
   currentRange = { start, end, left, right, top, bottom, width, height };
   const visibleCount = end - start;
@@ -229,15 +229,18 @@ function drawChart(): void {
     const ymin = 0;
     const yOf = (v: number) => bandTop + bandH - ((v - ymin) / (ymax - ymin)) * bandH;
 
-    // 网格与刻度
+    // 网格与刻度:顶线(量程)与 0 轴基线加粗
     context.font = '10px Consolas, monospace';
     context.textAlign = 'right';
     for (let g = 0; g <= 4; g++) {
       const y = bandTop + (g / 4) * bandH;
-      context.strokeStyle = g === 0 ? GRID_BASE : GRID;
+      const isEdge = g === 0 || g === 4;
+      context.strokeStyle = isEdge ? GRID_BASE : GRID;
+      context.lineWidth = isEdge ? 1.6 : 1;
       context.beginPath();
       context.moveTo(left, y); context.lineTo(width - right, y);
       context.stroke();
+      context.lineWidth = 1;
       const value = ymax - (g / 4) * (ymax - ymin);
       context.fillStyle = MUTED;
       context.fillText(Math.abs(value) >= 100 ? value.toFixed(0) : value.toFixed(value % 1 === 0 ? 0 : 1), left - 4, y + 3);
