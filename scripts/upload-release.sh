@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================
-# GitHub Release v0.1.2 一键创建与上传
+# GitHub Release v0.1.3 一键创建与上传
 # 前置:一个对 RatHeart-SimPro 有 Contents: Read and write 权限的
 #      fine-grained PAT(仅存于环境变量,不落盘)
 # 用法:GH_TOKEN=<token> bash scripts/upload-release.sh
@@ -10,22 +10,22 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 REPO="Starwords117/RatHeart-SimPro"
-TAG="v0.1.2"
+TAG="v0.1.3"
 : "${GH_TOKEN:?请以 GH_TOKEN=<fine-grained PAT> 运行}"
 
 API="https://api.github.com/repos/${REPO}"
 UPLOAD="https://uploads.github.com/repos/${REPO}/releases"
 ASSETS=(
-  release/RatHeart-SimPro-0.1.2-x64-Setup.exe
-  release/RatHeart-SimPro-0.1.2-x64-Portable.exe
-  release/RatHeart-SimPro-0.1.2-x86_64-AppImage
-  release/ratheart-simpro_0.1.2_amd64.deb
-  release/RatHeart-SimPro-0.1.2-mac.zip
-  release/RatHeart-SimPro-0.1.2-arm64-mac.zip
+  release/RatHeart-SimPro-0.1.3-x64-Setup.exe
+  release/RatHeart-SimPro-0.1.3-x64-Portable.exe
+  release/RatHeart-SimPro-0.1.3-x86_64-AppImage
+  release/ratheart-simpro_0.1.3_amd64.deb
+  release/RatHeart-SimPro-0.1.3-mac.zip
+  release/RatHeart-SimPro-0.1.3-arm64-mac.zip
   release/SHA256SUMS.txt
 )
 
-BODY=$(python3 -c "import json;print(json.dumps(open('docs/RELEASE_NOTES_v0.1.2.md',encoding='utf-8').read()))")
+BODY=$(python3 -c "import json;print(json.dumps(open('docs/RELEASE_NOTES_v0.1.3.md',encoding='utf-8').read()))")
 
 echo "==> 已存在的 Release 检查(tag: ${TAG})"
 RELEASE_ID=$(curl -s -H "Authorization: Bearer ${GH_TOKEN}" "${API}/releases/tags/${TAG}" \
@@ -38,7 +38,7 @@ else
   echo "==> 创建 Release ${TAG}"
   RELEASE_ID=$(curl -sf -X POST "${API}/releases" \
     -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" \
-    -d "{\"tag_name\":\"${TAG}\",\"name\":\"RatHeart-SimPro v0.1.2\",\"body\":${BODY},\"draft\":false,\"prerelease\":false}" \
+    -d "{\"tag_name\":\"${TAG}\",\"name\":\"RatHeart-SimPro v0.1.3\",\"body\":${BODY},\"draft\":false,\"prerelease\":false}" \
     | python3 -c "import json,sys;print(json.load(sys.stdin)['id'])")
   echo "    创建成功(id=${RELEASE_ID})"
 fi
