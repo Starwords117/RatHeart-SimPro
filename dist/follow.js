@@ -218,7 +218,7 @@ async function poll() {
     sentE = data.totalE;
     if (data.state) {
       setStatus("\u5B9E\u65F6\u8DDF\u968F\u8001\u5E08\u7AEF", true);
-      setPollInterval(100);
+      setPollInterval(50);
     } else {
       setStatus("\u8001\u5E08\u7AEF\u5C1A\u672A\u5F00\u59CB\u5E7F\u64AD\uFF0C\u7B49\u5F85\u4E2D\u2026", false);
       setPollInterval(1500);

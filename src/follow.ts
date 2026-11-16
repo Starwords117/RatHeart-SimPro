@@ -180,7 +180,7 @@ async function poll(): Promise<void> {
     seenSeq = data.seq;
     applyUpdate(!!data.reset || !data.state, data);
     sentF = data.totalF; sentE = data.totalE;
-    if (data.state) { setStatus('实时跟随老师端', true); setPollInterval(100); }
+    if (data.state) { setStatus('实时跟随老师端', true); setPollInterval(50); }
     else { setStatus('老师端尚未开始广播，等待中…', false); setPollInterval(1500); }
   } catch {
     setStatus('连接中断，自动重试中…', false);
