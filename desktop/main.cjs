@@ -4,7 +4,7 @@ const nodeNet = require('node:net');
 const { pathToFileURL } = require('node:url');
 const { createBroadcastServer } = require('../server/broadcast-server.cjs');
 
-const APP_URL = 'ratheart://lab/index.html';
+let APP_URL = 'ratheart://lab/index.html';   // 广播服务器启动后追加 ?api=<端口>
 const assets = path.resolve(__dirname, '..', 'dist');
 let broadcastPort = 0;
 
@@ -76,6 +76,7 @@ async function serveAsset(request) {
 }
 
 function createWindow() {
+  if (broadcastPort) APP_URL = `ratheart://lab/index.html?api=${broadcastPort}`;
   const window = new BrowserWindow({
     width: 1360,
     height: 900,

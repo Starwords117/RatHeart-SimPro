@@ -148,6 +148,19 @@ function createBroadcastServer({ root, port, openLan = true }) {
     const url = new URL(req.url || '/', 'http://localhost');
     const pathname = decodeURIComponent(url.pathname);
 
+    // CORS:桌面版 ratheart:// 页面/worker 直连 http 回环推送(跨源)
+    if (pathname.startsWith('/api/')) {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      if (req.method === 'OPTIONS') {
+        res.writeHead(204, {
+          'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+          'Access-Control-Allow-Headers': 'content-type'
+        });
+        res.end();
+        return;
+      }
+    }
+
     if (pathname === '/api/broadcast' && req.method === 'POST') {
       let body = '';
       req.on('data', chunk => { body += chunk; if (body.length > 8e6) req.destroy(); });

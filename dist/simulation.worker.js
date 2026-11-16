@@ -5,7 +5,7 @@ let sentFrames = 0, sentEvents = 0;
 let last = performance.now(), budget = 0;
 const BROADCAST_WINDOW = 18e3;
 let broadcastOn = false, broadcastSeq = 0, bSentFrames = 0, bSentEvents = 0, lastBroadcast = 0, broadcastFull = false;
-let broadcastRoom = "", broadcastToken = "";
+let broadcastRoom = "", broadcastToken = "", broadcastBase = "";
 function broadcastNow() {
   const traceLen = experiment.trace.length;
   const windowStart = Math.max(0, traceLen - BROADCAST_WINDOW);
@@ -23,9 +23,15 @@ function broadcastNow() {
   payload.room = broadcastRoom;
   payload.token = broadcastToken;
   broadcastFull = false;
-  scope.fetch("/api/broadcast", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) }).then((r) => r.json()).then((d) => scope.postMessage({ type: "broadcast", on: broadcastOn, followers: d.followers ?? 0 })).catch(() => {
+  const ctrl = new AbortController();
+  const kill = setTimeout(() => ctrl.abort(), 5e3);
+  scope.fetch(`${broadcastBase}/api/broadcast`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload), signal: ctrl.signal }).then((r) => r.json()).then((d) => {
+    clearTimeout(kill);
+    scope.postMessage({ type: "broadcast", on: broadcastOn, followers: d.followers ?? 0 });
+  }).catch((e) => {
+    clearTimeout(kill);
     broadcastOn = false;
-    scope.postMessage({ type: "broadcast", on: false, error: true });
+    scope.postMessage({ type: "broadcast", on: false, error: true, detail: String(e && e.message || e) });
   });
 }
 function send(replace = false) {
@@ -137,6 +143,7 @@ scope.onmessage = (event) => {
     case "broadcast-on":
       broadcastRoom = m.room ?? "";
       broadcastToken = m.token ?? "";
+      broadcastBase = m.base ?? "";
       broadcastOn = true;
       broadcastSeq += 1;
       bSentFrames = 0;
@@ -148,7 +155,7 @@ scope.onmessage = (event) => {
     // 关闭广播需回执,否则界面按钮状态不翻转;同时通知服务器清空房间会话
     case "broadcast-off": {
       broadcastOn = false;
-      scope.fetch("/api/broadcast-off", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ room: broadcastRoom, token: broadcastToken }) }).then((r) => r.json()).catch(() => {
+      scope.fetch(`${broadcastBase}/api/broadcast-off`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ room: broadcastRoom, token: broadcastToken }) }).catch(() => {
       });
       scope.postMessage({ type: "broadcast", on: false, followers: 0 });
       break;

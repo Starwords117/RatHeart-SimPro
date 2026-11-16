@@ -12,7 +12,7 @@ export const DT = 0.000125;                 // 原版 t.Step
 export const STEPS_PER_POINT = 100;         // 原版 NumStepsPerDisplayPoint
 export const POINT_DT = DT * STEPS_PER_POINT;
 export const RECEPTOR_DT = 0.005;           // 原版 t.next 步进
-export const MODEL_VERSION = 'ratheart-simpro-0.2.0'; // 模型移植自 RatCVS 3.3.7 (30.07.20)
+export const MODEL_VERSION = 'ratheart-simpro-0.2.1'; // 模型移植自 RatCVS 3.3.7 (30.07.20)
 /** 原版默认回放速度：TTimer.Interval=50ms → 20 显示点/s，
  *  每点 12.5 ms 生理时间 → 0.25 生理秒/实际秒。 */
 export const DEFAULT_SPEED = 0.25;

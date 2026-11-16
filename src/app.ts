@@ -452,6 +452,7 @@ worker.onmessage = (event: MessageEvent) => {
       const was = broadcasting;
       broadcasting = m.on;
       updateBroadcastButton(m.followers ?? 0, m.error);
+      if (m.error) toast(`广播启动失败:${m.detail ?? '网络或服务不可达'}`);
       if (!was && broadcasting && lanInfo?.primaryFollow) {
         toast(`授课广播已开启,同学浏览器访问:${lanInfo.primaryFollow}`);
       }
@@ -668,7 +669,14 @@ $('#concentration-button').addEventListener('click', () => {
 });
 
 // ---- 广播 ----
-// web(http/https)与桌面版(ratheart://,内嵌广播服务器 + /api 代理)均支持
+// web(http/https)与桌面版(ratheart://,内嵌广播服务器)均支持;
+// 桌面版 API 直连 http://127.0.0.1:<端口>(主进程经 ?api= 传入),
+// 避免自定义协议代理在 worker POST 上的不确定性
+const DESKTOP_API_BASE = (() => {
+  const p = new URLSearchParams(location.search).get('api');
+  return p ? `http://127.0.0.1:${p}` : '';
+})();
+const api = (p: string) => DESKTOP_API_BASE + p;
 const BROADCAST_CAPABLE = location.protocol.startsWith('http') || location.protocol === 'ratheart:';
 const broadcastButton = $<HTMLButtonElement>('#broadcast-button');
 // 房间隔离:每位教师一个房间(学生跟随链接携带 ?room=);token 为教师令牌,
@@ -687,19 +695,19 @@ if (BROADCAST_CAPABLE) {
   broadcastButton.textContent = '开始授课广播';
   broadcastButton.addEventListener('click', () => {
     if (broadcasting) {
-      // worker 会携带 room+token 通知服务器清空房间会话
-      send('broadcast-off');
+      // worker 会携带 room+token+base 通知服务器清空房间会话
+      send('broadcast-off', { base: DESKTOP_API_BASE });
     } else {
       if (!broadcastRoom) {
         broadcastRoom = genRoom();
         localStorage.setItem('ratheart-room', broadcastRoom);
       }
       broadcastToken = genToken();
-      send('broadcast-on', { room: broadcastRoom, token: broadcastToken });
+      send('broadcast-on', { room: broadcastRoom, token: broadcastToken, base: DESKTOP_API_BASE });
     }
   });
   // 获取教学机局域网地址,开启广播后提示同学访问地址
-  fetch('/api/lan', { cache: 'no-store' })
+  fetch(api('/api/lan'), { cache: 'no-store' })
     .then(r => r.json())
     .then(d => { lanInfo = d; updateBroadcastButton(0); })
     .catch(() => { /* Electron/file 模式无此接口 */ });
@@ -710,7 +718,7 @@ let lastSessionLive = false;
 let liveBannerDismissed = false;
 function pollLiveSession(): void {
   if (!BROADCAST_CAPABLE) return;
-  fetch('/api/session', { cache: 'no-store' })
+  fetch(api('/api/session'), { cache: 'no-store' })
     .then(r => r.json())
     .then(data => {
       if (lastSessionLive === false && data.live) liveBannerDismissed = false;

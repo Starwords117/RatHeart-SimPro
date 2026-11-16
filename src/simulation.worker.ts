@@ -17,7 +17,7 @@ let last = performance.now(), budget = 0;
 // 18000 帧窗口(与服务器窗口一致),避免恢复长实验后整条 trace 超限被销毁。
 const BROADCAST_WINDOW = 18000;
 let broadcastOn = false, broadcastSeq = 0, bSentFrames = 0, bSentEvents = 0, lastBroadcast = 0, broadcastFull = false;
-let broadcastRoom = '', broadcastToken = '';
+let broadcastRoom = '', broadcastToken = '', broadcastBase = '';
 function broadcastNow(): void {
   const traceLen = experiment.trace.length;
   const windowStart = Math.max(0, traceLen - BROADCAST_WINDOW);
@@ -33,10 +33,13 @@ function broadcastNow(): void {
   payload.room = broadcastRoom;
   payload.token = broadcastToken;
   broadcastFull = false;
-  scope.fetch('/api/broadcast', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) })
+  // POST 显式超时:失败/挂起都以 detail 回执,界面可见
+  const ctrl = new AbortController();
+  const kill = setTimeout(() => ctrl.abort(), 5000);
+  scope.fetch(`${broadcastBase}/api/broadcast`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload), signal: ctrl.signal })
     .then((r: any) => r.json())
-    .then((d: any) => scope.postMessage({ type: 'broadcast', on: broadcastOn, followers: d.followers ?? 0 }))
-    .catch(() => { broadcastOn = false; scope.postMessage({ type: 'broadcast', on: false, error: true }); });
+    .then((d: any) => { clearTimeout(kill); scope.postMessage({ type: 'broadcast', on: broadcastOn, followers: d.followers ?? 0 }); })
+    .catch((e: any) => { clearTimeout(kill); broadcastOn = false; scope.postMessage({ type: 'broadcast', on: false, error: true, detail: String(e && e.message || e) }); });
 }
 
 function send(replace = false): void {
@@ -88,13 +91,12 @@ scope.onmessage = (event: MessageEvent) => {
       } catch (error) { console.error(error); scope.postMessage({ type: 'file-error' }); }
       break;
     case 'broadcast-on':
-      broadcastRoom = m.room ?? ''; broadcastToken = m.token ?? '';
+      broadcastRoom = m.room ?? ''; broadcastToken = m.token ?? ''; broadcastBase = m.base ?? '';
       broadcastOn = true; broadcastSeq += 1; bSentFrames = 0; bSentEvents = 0; broadcastFull = true; lastBroadcast = 0; broadcastNow(); break;
     // 关闭广播需回执,否则界面按钮状态不翻转;同时通知服务器清空房间会话
     case 'broadcast-off': {
       broadcastOn = false;
-      scope.fetch('/api/broadcast-off', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ room: broadcastRoom, token: broadcastToken }) })
-        .then((r: any) => r.json())
+      scope.fetch(`${broadcastBase}/api/broadcast-off`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ room: broadcastRoom, token: broadcastToken }) })
         .catch(() => { /* 服务器不可达时 GC 会兜底 */ });
       scope.postMessage({ type: 'broadcast', on: false, followers: 0 });
       break;
