@@ -136,7 +136,7 @@ setInterval(() => {
   const now = performance.now();
   const elapsed = Math.min((now - last) / 1e3, 0.5);
   last = now;
-  if (broadcastOn && (broadcastFull || now - lastBroadcast >= 300 || experiment.trace.length > bSentFrames + 400)) {
+  if (broadcastOn && (broadcastFull || now - lastBroadcast >= 150 || experiment.trace.length > bSentFrames + 200)) {
     lastBroadcast = now;
     broadcastNow();
   }

@@ -83,8 +83,8 @@ scope.onmessage = (event: MessageEvent) => {
 setInterval(() => {
   const now = performance.now();
   const elapsed = Math.min((now - last) / 1000, 0.5); last = now;
-  // 推送节奏 300ms:配合学生端 0.2s 轮询,跟随延迟约 ≤0.5 s
-  if (broadcastOn && (broadcastFull || now - lastBroadcast >= 300 || experiment.trace.length > bSentFrames + 400)) {
+  // 推送节奏 150ms:配合学生端 0.1s 轮询,跟随延迟约 ≤0.3 s
+  if (broadcastOn && (broadcastFull || now - lastBroadcast >= 150 || experiment.trace.length > bSentFrames + 200)) {
     lastBroadcast = now;
     broadcastNow();
   }

@@ -56,14 +56,14 @@ function drawChart(): void {
   }
   const ctx = context; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, width, height);
+  // 遮罩开关在一切早退之前执行,保证状态始终正确
+  $('#plot-empty').classList.toggle('hidden', frames.length > 1);
   if (frames.length < 2) return;
-  const windowSeconds = Number(($<HTMLSelectElement>('#window-select')).value);
-  const lastT = frames.at(-1)!.t;
-  const duration = windowSeconds > 0 ? windowSeconds * 0.00625 : Math.max(5, lastT);
-  const endT = Math.min(lastT, Math.max(duration, state?.time ?? lastT));
-  const startT = windowSeconds > 0 ? endT - duration : 0;
-  const start = Math.max(0, Math.floor(startT / 0.00625));
-  const end = Math.min(frames.length, Math.ceil(endT / 0.00625) + 1);
+  // 按下标开窗(取最近 N 个子样本):服务器只保留最近 18000 帧,
+  // 帧的 t 是绝对时间,不能再用 时间/采样间隔 反推下标
+  const windowSamples = Number(($<HTMLSelectElement>('#window-select')).value);
+  const end = frames.length;
+  const start = windowSamples > 0 ? Math.max(0, end - windowSamples) : 0;
   if (end - start < 2) return;
 
   const left = width < 480 ? 42 : 46, right = 12, top = 8, bottom = 30;
@@ -147,7 +147,7 @@ setInterval(() => {
   } catch (error) {
     (window as any).__followError = String((error as Error)?.stack ?? error);
   }
-}, 150);
+}, 100);
 
 function applyUpdate(reset: boolean, message: any): void {
   state = message.state ?? state;
@@ -180,7 +180,7 @@ async function poll(): Promise<void> {
     seenSeq = data.seq;
     applyUpdate(!!data.reset || !data.state, data);
     sentF = data.totalF; sentE = data.totalE;
-    if (data.state) { setStatus('实时跟随老师端', true); setPollInterval(200); }
+    if (data.state) { setStatus('实时跟随老师端', true); setPollInterval(100); }
     else { setStatus('老师端尚未开始广播，等待中…', false); setPollInterval(1500); }
   } catch {
     setStatus('连接中断，自动重试中…', false);

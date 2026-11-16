@@ -62,14 +62,11 @@ function drawChart() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, width, height);
+  $("#plot-empty").classList.toggle("hidden", frames.length > 1);
   if (frames.length < 2) return;
-  const windowSeconds = Number($("#window-select").value);
-  const lastT = frames.at(-1).t;
-  const duration = windowSeconds > 0 ? windowSeconds * 625e-5 : Math.max(5, lastT);
-  const endT = Math.min(lastT, Math.max(duration, state?.time ?? lastT));
-  const startT = windowSeconds > 0 ? endT - duration : 0;
-  const start = Math.max(0, Math.floor(startT / 625e-5));
-  const end = Math.min(frames.length, Math.ceil(endT / 625e-5) + 1);
+  const windowSamples = Number($("#window-select").value);
+  const end = frames.length;
+  const start = windowSamples > 0 ? Math.max(0, end - windowSamples) : 0;
   if (end - start < 2) return;
   const left = width < 480 ? 42 : 46, right = 12, top = 8, bottom = 30;
   const pw = width - left - right, ph = height - top - bottom;
@@ -186,7 +183,7 @@ setInterval(() => {
   } catch (error) {
     window.__followError = String(error?.stack ?? error);
   }
-}, 150);
+}, 100);
 function applyUpdate(reset, message) {
   state = message.state ?? state;
   if (reset) {
@@ -221,7 +218,7 @@ async function poll() {
     sentE = data.totalE;
     if (data.state) {
       setStatus("\u5B9E\u65F6\u8DDF\u968F\u8001\u5E08\u7AEF", true);
-      setPollInterval(200);
+      setPollInterval(100);
     } else {
       setStatus("\u8001\u5E08\u7AEF\u5C1A\u672A\u5F00\u59CB\u5E7F\u64AD\uFF0C\u7B49\u5F85\u4E2D\u2026", false);
       setPollInterval(1500);
