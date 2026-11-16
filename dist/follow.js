@@ -186,7 +186,7 @@ setInterval(() => {
   } catch (error) {
     window.__followError = String(error?.stack ?? error);
   }
-}, 250);
+}, 150);
 function applyUpdate(reset, message) {
   state = message.state ?? state;
   if (reset) {
@@ -200,6 +200,14 @@ function applyUpdate(reset, message) {
   dirty = true;
 }
 let seenSeq = -1, sentF = 0, sentE = 0, polling = false;
+let pollTimer;
+let pollIntervalMs = 1500;
+function setPollInterval(ms) {
+  if (pollIntervalMs === ms) return;
+  pollIntervalMs = ms;
+  clearInterval(pollTimer);
+  pollTimer = setInterval(poll, ms);
+}
 async function poll() {
   if (polling) return;
   polling = true;
@@ -211,13 +219,18 @@ async function poll() {
     applyUpdate(!!data.reset || !data.state, data);
     sentF = data.totalF;
     sentE = data.totalE;
-    if (data.state) setStatus("\u5B9E\u65F6\u8DDF\u968F\u8001\u5E08\u7AEF", true);
-    else setStatus("\u8001\u5E08\u7AEF\u5C1A\u672A\u5F00\u59CB\u5E7F\u64AD\uFF0C\u7B49\u5F85\u4E2D\u2026", false);
+    if (data.state) {
+      setStatus("\u5B9E\u65F6\u8DDF\u968F\u8001\u5E08\u7AEF", true);
+      setPollInterval(200);
+    } else {
+      setStatus("\u8001\u5E08\u7AEF\u5C1A\u672A\u5F00\u59CB\u5E7F\u64AD\uFF0C\u7B49\u5F85\u4E2D\u2026", false);
+      setPollInterval(1500);
+    }
   } catch {
     setStatus("\u8FDE\u63A5\u4E2D\u65AD\uFF0C\u81EA\u52A8\u91CD\u8BD5\u4E2D\u2026", false);
   } finally {
     polling = false;
   }
 }
-setInterval(poll, 1500);
+pollTimer = setInterval(poll, pollIntervalMs);
 poll();

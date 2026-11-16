@@ -147,7 +147,7 @@ setInterval(() => {
   } catch (error) {
     (window as any).__followError = String((error as Error)?.stack ?? error);
   }
-}, 250);
+}, 150);
 
 function applyUpdate(reset: boolean, message: any): void {
   state = message.state ?? state;
@@ -159,8 +159,17 @@ function applyUpdate(reset: boolean, message: any): void {
   dirty = true;
 }
 
-// HTTP 轮询：增量拉取老师端状态
+// HTTP 轮询：增量拉取老师端状态。
+// 自适应间隔:跟随中 0.2 s(体感延迟 ≤0.3 s),等待开播/连接中断 1.5 s 减负
 let seenSeq = -1, sentF = 0, sentE = 0, polling = false;
+let pollTimer: ReturnType<typeof setInterval> | undefined;
+let pollIntervalMs = 1500;
+function setPollInterval(ms: number): void {
+  if (pollIntervalMs === ms) return;
+  pollIntervalMs = ms;
+  clearInterval(pollTimer);
+  pollTimer = setInterval(poll, ms);
+}
 async function poll(): Promise<void> {
   if (polling) return;
   polling = true;
@@ -171,13 +180,13 @@ async function poll(): Promise<void> {
     seenSeq = data.seq;
     applyUpdate(!!data.reset || !data.state, data);
     sentF = data.totalF; sentE = data.totalE;
-    if (data.state) setStatus('实时跟随老师端', true);
-    else setStatus('老师端尚未开始广播，等待中…', false);
+    if (data.state) { setStatus('实时跟随老师端', true); setPollInterval(200); }
+    else { setStatus('老师端尚未开始广播，等待中…', false); setPollInterval(1500); }
   } catch {
     setStatus('连接中断，自动重试中…', false);
   } finally {
     polling = false;
   }
 }
-setInterval(poll, 1500);
+pollTimer = setInterval(poll, pollIntervalMs);
 poll();
