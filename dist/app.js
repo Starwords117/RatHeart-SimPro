@@ -1,5 +1,5 @@
 import { DRUGS, NERVE_PATHWAYS, doseList } from "./catalog.js";
-import { MODEL_VERSION, DEFAULT_WINDOW_POINTS } from "./core.js";
+import { MODEL_VERSION, DEFAULT_WINDOW_POINTS, CH_SCALE, SAMPLE_DT } from "./core.js";
 const $ = (selector) => document.querySelector(selector);
 const worker = new Worker(new URL("./simulation.worker.js", import.meta.url), { type: "module" });
 const canvas = $("#trace-canvas");
@@ -388,9 +388,36 @@ worker.onmessage = (event) => {
     case "snapshot": {
       const snapshot = m.snapshot;
       if (m.purpose === "autosave") {
-        const trimmed = { ...snapshot, trace: snapshot.trace.slice(-96e3).map(roundFrame) };
+        const n = Math.min(snapshot.trace.length, 96e3);
+        const trace = snapshot.trace.slice(-n);
+        const buf = new Int16Array(n * 5);
+        const put = (i, j, v) => {
+          buf[i * 5 + j] = Math.max(-32768, Math.min(32767, Math.round(v)));
+        };
+        trace.forEach((f, i) => {
+          put(i, 0, f.abp / CH_SCALE.abp);
+          put(i, 1, f.lvp / CH_SCALE.lvp);
+          put(i, 2, f.vbp / CH_SCALE.vbp);
+          put(i, 3, f.hf / CH_SCALE.hf);
+          put(i, 4, f.hr / CH_SCALE.hr);
+        });
+        const u8 = new Uint8Array(buf.buffer);
+        let bin = "";
+        for (let i = 0; i < u8.length; i += 32768) {
+          bin += String.fromCharCode(...u8.subarray(i, i + 32768));
+        }
+        const payload = {
+          format: "ratheart-autosave",
+          version: 2,
+          modelVersion: snapshot.modelVersion,
+          savedAt: snapshot.savedAt,
+          state: snapshot.state,
+          events: snapshot.events,
+          traceLen: n,
+          traceB64: btoa(bin)
+        };
         try {
-          localStorage.setItem("ratheart-simpro-session-v1", JSON.stringify(trimmed));
+          localStorage.setItem("ratheart-simpro-session-v1", JSON.stringify(payload));
         } catch {
         }
       } else {
@@ -642,11 +669,52 @@ setInterval(() => {
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden" && state && state.points > 0) send("snapshot", { purpose: "autosave" });
 });
+function decodeAutosave(data) {
+  try {
+    if (data.format !== "ratheart-autosave" || data.version !== 2) return null;
+    const bin = atob(data.traceB64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const buf = new Int16Array(bytes.buffer);
+    const n = Math.min(data.traceLen, buf.length / 5 | 0);
+    const t0 = (data.state.points - n) * SAMPLE_DT;
+    const trace = [];
+    for (let i = 0; i < n; i++) {
+      trace.push({
+        t: t0 + i * SAMPLE_DT,
+        abp: buf[i * 5] * CH_SCALE.abp,
+        lvp: buf[i * 5 + 1] * CH_SCALE.lvp,
+        vbp: buf[i * 5 + 2] * CH_SCALE.vbp,
+        hf: buf[i * 5 + 3] * CH_SCALE.hf,
+        hr: buf[i * 5 + 4] * CH_SCALE.hr
+      });
+    }
+    return {
+      format: "ratheart-simpro",
+      version: 1,
+      modelVersion: data.modelVersion,
+      savedAt: data.savedAt,
+      state: data.state,
+      trace,
+      events: data.events ?? []
+    };
+  } catch {
+    return null;
+  }
+}
 (function restoreAutosave() {
   const saved = localStorage.getItem("ratheart-simpro-session-v1");
   if (!saved) return;
   try {
-    const snapshot = JSON.parse(saved);
+    const data = JSON.parse(saved);
+    let snapshot;
+    if (data.format === "ratheart-autosave") {
+      const decoded = decodeAutosave(data);
+      if (!decoded) return;
+      snapshot = decoded;
+    } else {
+      snapshot = data;
+    }
     if (snapshot.format !== "ratheart-simpro" || snapshot.version !== 1) return;
     send("restore", { snapshot });
     toast(snapshot.state?.recorderStarted ? "\u5DF2\u6062\u590D\u4E0A\u6B21\u81EA\u52A8\u4FDD\u5B58\u7684\u5B9E\u9A8C\uFF08\u8BB0\u5F55\u5DF2\u5F00\u59CB\uFF1A\u52A8\u7269\u6A21\u578B\u5DF2\u9501\u5B9A\uFF0C\u70B9\u51FB\u300C\u65B0\u5EFA\u5B9E\u9A8C\u300D\u53EF\u91CD\u65B0\u5F00\u59CB\uFF09\u3002" : "\u5DF2\u6062\u590D\u4E0A\u6B21\u81EA\u52A8\u4FDD\u5B58\u7684\u5B9E\u9A8C\u3002");

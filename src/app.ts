@@ -5,7 +5,7 @@
 
 import { DRUGS, NERVE_PATHWAYS, drugById, doseList } from './catalog.js';
 import type { DrugDefinition } from './catalog.js';
-import { MODEL_VERSION, DEFAULT_WINDOW_POINTS } from './core.js';
+import { MODEL_VERSION, DEFAULT_WINDOW_POINTS, CH_SCALE, SAMPLE_DT } from './core.js';
 import type { Frame, ExperimentEvent, SessionState, Snapshot } from './core.js';
 
 const $ = <T extends HTMLElement = HTMLElement>(selector: string) => document.querySelector<T>(selector)!;
@@ -402,9 +402,32 @@ worker.onmessage = (event: MessageEvent) => {
     case 'snapshot': {
       const snapshot = m.snapshot as Snapshot;
       if (m.purpose === 'autosave') {
-        // 自动保存：截取最近 96000 子样本（≈10 分钟）并降精度，控制 localStorage 体积
-        const trimmed = { ...snapshot, trace: snapshot.trace.slice(-96000).map(roundFrame) };
-        try { localStorage.setItem('ratheart-simpro-session-v1', JSON.stringify(trimmed)); } catch { /* 容量不足时忽略 */ }
+        // 自动保存:最近 96000 子样本(≈10 分钟)以 int16×5 通道 base64 紧凑编码
+        // (与 .rat 同精度,时间由下标重建),体积约 1.3MB,Firefox/Safari 5MB 配额内
+        const n = Math.min(snapshot.trace.length, 96000);
+        const trace = snapshot.trace.slice(-n);
+        const buf = new Int16Array(n * 5);
+        const put = (i: number, j: number, v: number) => {
+          buf[i * 5 + j] = Math.max(-32768, Math.min(32767, Math.round(v)));
+        };
+        trace.forEach((f, i) => {
+          put(i, 0, f.abp / CH_SCALE.abp);
+          put(i, 1, f.lvp / CH_SCALE.lvp);
+          put(i, 2, f.vbp / CH_SCALE.vbp);
+          put(i, 3, f.hf / CH_SCALE.hf);
+          put(i, 4, f.hr / CH_SCALE.hr);
+        });
+        const u8 = new Uint8Array(buf.buffer);
+        let bin = '';
+        for (let i = 0; i < u8.length; i += 0x8000) {
+          bin += String.fromCharCode(...u8.subarray(i, i + 0x8000));
+        }
+        const payload = {
+          format: 'ratheart-autosave', version: 2, modelVersion: snapshot.modelVersion,
+          savedAt: snapshot.savedAt, state: snapshot.state, events: snapshot.events,
+          traceLen: n, traceB64: btoa(bin)
+        };
+        try { localStorage.setItem('ratheart-simpro-session-v1', JSON.stringify(payload)); } catch { /* 容量不足时忽略 */ }
       } else {
         download(new Blob([JSON.stringify(snapshot, null, 1)], { type: 'application/json' }), filename('json'));
       }
@@ -681,11 +704,48 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden' && state && state.points > 0) send('snapshot', { purpose: 'autosave' });
 });
 
+// 自动保存紧凑格式(ratheart-autosave v2)→ 完整快照:
+// int16 值 × 标度还原物理量,时间由下标重建(波形时间恒为 i×SAMPLE_DT)
+function decodeAutosave(data: any): Snapshot | null {
+  try {
+    if (data.format !== 'ratheart-autosave' || data.version !== 2) return null;
+    const bin = atob(data.traceB64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const buf = new Int16Array(bytes.buffer);
+    const n = Math.min(data.traceLen, buf.length / 5 | 0);
+    const t0 = (data.state.points - n) * SAMPLE_DT;
+    const trace: Frame[] = [];
+    for (let i = 0; i < n; i++) {
+      trace.push({
+        t: t0 + i * SAMPLE_DT,
+        abp: buf[i * 5] * CH_SCALE.abp,
+        lvp: buf[i * 5 + 1] * CH_SCALE.lvp,
+        vbp: buf[i * 5 + 2] * CH_SCALE.vbp,
+        hf: buf[i * 5 + 3] * CH_SCALE.hf,
+        hr: buf[i * 5 + 4] * CH_SCALE.hr
+      });
+    }
+    return {
+      format: 'ratheart-simpro', version: 1, modelVersion: data.modelVersion,
+      savedAt: data.savedAt, state: data.state, trace, events: data.events ?? []
+    };
+  } catch { return null; }
+}
+
 (function restoreAutosave(): void {
   const saved = localStorage.getItem('ratheart-simpro-session-v1');
   if (!saved) return;
   try {
-    const snapshot = JSON.parse(saved);
+    const data = JSON.parse(saved);
+    let snapshot: Snapshot;
+    if (data.format === 'ratheart-autosave') {
+      const decoded = decodeAutosave(data);
+      if (!decoded) return;
+      snapshot = decoded;
+    } else {
+      snapshot = data;
+    }
     if (snapshot.format !== 'ratheart-simpro' || snapshot.version !== 1) return;
     send('restore', { snapshot });
     toast(snapshot.state?.recorderStarted
