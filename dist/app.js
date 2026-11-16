@@ -152,6 +152,7 @@ function drawChart() {
   currentRange = { start, end, left, right, top, bottom, width, height };
   const visibleCount = end - start;
   const stride = Math.max(1, Math.floor(visibleCount / (plotW * 2)));
+  const ovDur = () => (frames[Math.min(end, frames.length) - 1]?.t ?? 0) - (frames[start]?.t ?? 0);
   context.save();
   context.beginPath();
   context.rect(left, top, plotW, plotH);
@@ -191,6 +192,9 @@ function drawChart() {
       const v = frames[i][key];
       if (v > ymax) ymax = v * 1.15;
     }
+    for (const ov of overlays) {
+      for (const f of ov.frames) if (f[key] > ymax) ymax = f[key] * 1.15;
+    }
     if (key === "hr") ymax = Math.max(ymax, 400);
     const ymin = 0;
     const yOf = (v) => bandTop + bandH - (v - ymin) / (ymax - ymin) * bandH;
@@ -220,6 +224,29 @@ function drawChart() {
       context.font = "11px Consolas, monospace";
       const value = lastVisible[key];
       context.fillText(value.toFixed(key === "hr" || key === "abp" ? 0 : 1), width - right - 38, bandTop + 12);
+    }
+    if (overlays.length) {
+      const dur = ovDur();
+      if (dur > 0) {
+        context.save();
+        context.globalAlpha = 0.4;
+        context.lineWidth = 1.2;
+        for (const ov of overlays) {
+          const yOfO = (v) => bandTop + bandH - (v - ymin) / (ymax - ymin) * bandH;
+          context.strokeStyle = ov.color;
+          context.beginPath();
+          ov.frames.forEach((f, i) => {
+            const x = left + f.t / dur * plotW;
+            const y = yOfO(f[key]);
+            if (i === 0) context.moveTo(x, y);
+            else context.lineTo(x, y);
+          });
+          context.stroke();
+        }
+        context.globalAlpha = 1;
+        context.lineWidth = 1;
+        context.restore();
+      }
     }
     context.save();
     context.beginPath();
@@ -295,6 +322,36 @@ function animate() {
     dirty = false;
   }
   requestAnimationFrame(animate);
+}
+const OVERLAY_COLORS = ["#8b5cf6", "#d97706", "#0d9488", "#dc2626", "#65a30d"];
+let overlays = [];
+let overlaySeq = 0;
+$("#overlay-capture")?.addEventListener("click", () => {
+  const { start, end } = currentRange;
+  if (!frames.length || end - start < 10) {
+    toast("\u6682\u65E0\u53EF\u622A\u53D6\u7684\u66F2\u7EBF");
+    return;
+  }
+  const slice = frames.slice(start, end);
+  const stride = Math.max(1, Math.floor(slice.length / 2e3));
+  const cap = [];
+  for (let i = 0; i < slice.length; i += stride) cap.push(slice[i]);
+  overlaySeq += 1;
+  const ov = { id: overlaySeq, label: `\u5BF9\u6BD4 ${overlaySeq}`, color: OVERLAY_COLORS[(overlaySeq - 1) % OVERLAY_COLORS.length], frames: cap.map((f) => ({ ...f, t: f.t - slice[0].t })) };
+  overlays.push(ov);
+  renderOverlayChips();
+  toast(`\u5DF2\u4FDD\u5B58\u300C${ov.label}\u300D\u2014\u2014\u534A\u900F\u660E\u53E0\u52A0\u663E\u793A,\u53EF\u53E0\u52A0\u591A\u7EC4\u5BF9\u6BD4\u7ED9\u836F\u524D\u540E`);
+  dirty = true;
+});
+function renderOverlayChips() {
+  const box = $("#overlay-chips");
+  box.classList.toggle("hidden", overlays.length === 0);
+  box.innerHTML = overlays.map((o) => `<span class="overlay-chip" style="border-color:${o.color};color:${o.color}">${o.label} <button data-id="${o.id}" aria-label="\u79FB\u9664">\xD7</button></span>`).join("");
+  box.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
+    overlays = overlays.filter((o) => o.id !== Number(b.dataset.id));
+    renderOverlayChips();
+    dirty = true;
+  }));
 }
 new ResizeObserver(() => {
   dirty = true;
@@ -471,13 +528,16 @@ function updateBroadcastButton(followers, error = false) {
     return;
   }
   if (lanInfo.primaryFollow) {
-    const others = lanInfo.follow.filter((u) => u !== lanInfo.primaryFollow);
-    hint.innerHTML = `\u540C\u5B66\u6D4F\u89C8\u5668\u6253\u5F00:<code>${lanInfo.primaryFollow}</code>(\u540C\u4E00 Wi-Fi,\u5B9E\u65F6\u8DDF\u968F)` + (others.length ? ` <span class="ip-toggle" id="ip-toggle" title="\u5176\u4ED6\u53EF\u80FD\u7684\u5730\u5740">?</span><span class="ip-alt hidden">${others.map((u) => `<code>${u}</code>`).join("\u3001")}</span>` : "");
+    const info = lanInfo;
+    const roomQS = broadcastRoom ? `?room=${broadcastRoom}` : "";
+    const others = info.follow.filter((u) => u !== info.primaryFollow);
+    hint.innerHTML = `\u540C\u5B66\u6D4F\u89C8\u5668\u6253\u5F00:<code>${info.primaryFollow}${roomQS}</code>(\u540C\u4E00 Wi-Fi,\u5B9E\u65F6\u8DDF\u968F)` + (others.length ? ` <span class="ip-toggle" id="ip-toggle" title="\u5176\u4ED6\u53EF\u80FD\u7684\u5730\u5740">?</span><span class="ip-alt hidden">${others.map((u) => `<code>${u}${roomQS}</code>`).join("\u3001")}</span>` : "");
     hint.querySelector("#ip-toggle")?.addEventListener("click", () => {
       hint.querySelector(".ip-alt")?.classList.toggle("hidden");
     });
   } else {
-    hint.innerHTML = `\u540C\u5B66\u6D4F\u89C8\u5668\u6253\u5F00(\u591A\u9009\u4E00,\u4F18\u5148\u7B2C\u4E00\u4E2A):${lanInfo.follow.map((u) => `<code>${u}</code>`).join("\u3001")}(\u540C\u4E00 Wi-Fi,\u5B9E\u65F6\u8DDF\u968F)`;
+    const roomQS = broadcastRoom ? `?room=${broadcastRoom}` : "";
+    hint.innerHTML = `\u540C\u5B66\u6D4F\u89C8\u5668\u6253\u5F00(\u591A\u9009\u4E00,\u4F18\u5148\u7B2C\u4E00\u4E2A):${lanInfo.follow.map((u) => `<code>${u}${roomQS}</code>`).join("\u3001")}(\u540C\u4E00 Wi-Fi,\u5B9E\u65F6\u8DDF\u968F)`;
   }
 }
 $("#drug-select").addEventListener("change", updateDrug);
@@ -586,13 +646,29 @@ $("#concentration-button").addEventListener("click", () => {
 });
 const BROADCAST_CAPABLE = location.protocol.startsWith("http") || location.protocol === "ratheart:";
 const broadcastButton = $("#broadcast-button");
+let broadcastRoom = localStorage.getItem("ratheart-room") ?? "";
+let broadcastToken = "";
+function genRoom() {
+  const abc = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+  return [...crypto.getRandomValues(new Uint8Array(6))].map((b) => abc[b % abc.length]).join("");
+}
+function genToken() {
+  return [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
 if (BROADCAST_CAPABLE) {
   broadcastButton.classList.remove("hidden");
   broadcastButton.textContent = "\u5F00\u59CB\u6388\u8BFE\u5E7F\u64AD";
   broadcastButton.addEventListener("click", () => {
-    if (broadcasting) fetch("/api/broadcast-off", { method: "POST" }).catch(() => {
-    });
-    send(broadcasting ? "broadcast-off" : "broadcast-on");
+    if (broadcasting) {
+      send("broadcast-off");
+    } else {
+      if (!broadcastRoom) {
+        broadcastRoom = genRoom();
+        localStorage.setItem("ratheart-room", broadcastRoom);
+      }
+      broadcastToken = genToken();
+      send("broadcast-on", { room: broadcastRoom, token: broadcastToken });
+    }
   });
   fetch("/api/lan", { cache: "no-store" }).then((r) => r.json()).then((d) => {
     lanInfo = d;
@@ -641,6 +717,7 @@ const HELP_HTML = `
   <li>\u300C\u5FEB\u8FDB 30 s\u300D\u53EF\u8DF3\u8FC7\u836F\u7269\u8D77\u6548\u7B49\u5F85\uFF08\u901F\u5EA6\u9ED8\u8BA4 0.25\xD7\uFF0C\u4E0E\u539F\u7248\u8D70\u7EB8\u901F\u5EA6\u4E00\u81F4\uFF0C\u53EF\u8C03\u9AD8\uFF09\u3002</li>
 </ol>
 <p><strong>\u4E94\u6761\u901A\u9053</strong>\uFF1AABP \u52A8\u8109\u8840\u538B\u3001LVP \u5DE6\u5FC3\u5BA4\u5185\u538B\u3001VBP \u4E2D\u5FC3\u9759\u8109\u538B\u3001HF \u5FC3\u6536\u7F29\u529B\u3001HR \u5FC3\u7387\u3002</p>
+<p><strong>\u6559\u5B66\u5DE5\u5177</strong>\uFF1A\u300C\uFF0B\u5BF9\u6BD4\u300D\u628A\u5F53\u524D\u7A97\u53E3\u5B58\u4E3A\u534A\u900F\u660E\u53E0\u52A0\u66F2\u7EBF(\u7ED9\u836F\u524D\u540E\u5BF9\u7167);\u300C\u91CF\u6548\u66F2\u7EBF\u300D\u81EA\u52A8\u6C47\u603B\u5404\u5242\u91CF\u7684\u8840\u538B\u53CD\u5E94;\u300C\u6D4B\u91CF\u5DE5\u4F5C\u8868\u300D\u5149\u6807\u53D6\u6570\u586B\u8868\u5BFC\u51FA CSV\u3002\u53EF\u5728\u300C\u539F\u7406\u4E0E\u8BBE\u7F6E\u300D\u5F00\u542F\u6B7B\u4EA1\u540E\u66F2\u7EBF\u62C9\u5E73\u3002</p>
 <p><strong>\u6559\u5B66\u63D0\u793A</strong>\uFF1A\u52A8\u8109\u538B\u957F\u65F6\u95F4\u4F4E\u4E8E 20 mmHg \u4F1A\u5BFC\u81F4\u5927\u9F20\u6B7B\u4EA1\uFF1B\u5927\u5242\u91CF\u5730\u9AD8\u8F9B\uFF08\u226510 mg/kg\uFF09\u4F1A\u8BF1\u53D1\u5FC3\u5BA4\u98A4\u52A8\uFF0C\u5FC3\u810F\u505C\u6B62\u5C04\u8840\u3002\u300C\u672A\u77E5\u836F\u300DA\u2013K \u4F9B\u76F2\u68C0\u7EC3\u4E60\u2014\u2014\u5148\u6D4B\u5176\u4F5C\u7528\uFF0C\u518D\u7528\u5DF2\u77E5\u836F\u7269\u9274\u522B\u3002</p>
 <p><strong>\u6388\u8BFE\u5E7F\u64AD</strong>\uFF08\u4EC5\u7F51\u9875\u6A21\u5F0F\uFF09\uFF1A\u6559\u5B66\u673A\u4EE5 <code>npm start -- --lan</code> \u542F\u52A8\u540E\uFF0C\u70B9\u51FB\u300C\u5F00\u59CB\u6388\u8BFE\u5E7F\u64AD\u300D\uFF0C\u754C\u9762\u4F1A\u663E\u793A\u5C40\u57DF\u7F51\u5730\u5740\u2014\u2014\u540C\u5B66\u6D4F\u89C8\u5668\u6253\u5F00\u8BE5\u5730\u5740\u7684 <code>/follow.html</code>\uFF08\u6CE8\u610F\u4E0D\u662F\u4E3B\u9875\uFF09\uFF0C\u5373\u53EF\u5B9E\u65F6\u8DDF\u968F\u89C2\u770B\uFF1B\u5B66\u751F\u5C31\u7B97\u8BEF\u5F00\u4E3B\u9875\uFF0C\u4E5F\u4F1A\u770B\u5230\u300C\u8FDB\u5165\u8DDF\u968F\u9875\u300D\u7684\u63D0\u793A\u6A2A\u5E45\u3002\u505C\u6B62\u5E7F\u64AD\u540E\u8DDF\u968F\u9875\u56DE\u5230\u7B49\u5F85\u72B6\u6001\u3002</p>
 `;
@@ -651,11 +728,13 @@ function renderSettingsDialog() {
   <p><strong>\u8840\u836F\u52A8\u529B\u5B66</strong>\uFF1AdDose/dt = k_on\xB7(Injected\u2212Dose) \u2212 k_off\xB7Dose\uFF1B\u6CE8\u5C04\u5242\u91CF\u5E26 \xB110% \u968F\u673A\u6CE2\u52A8\uFF0C\u6548\u529B\u53C2\u6570\u5E26 \xB150% \u4E2A\u4F53\u5DEE\u5F02\uFF08\u4E0E\u539F\u7248\u4E00\u81F4\uFF09\u3002</p>
   <p><strong>\u538B\u529B\u611F\u53D7\u5668\u53CD\u5C04</strong>\uFF08\u4EC5\u6B63\u5E38\u5927\u9F20\uFF09\uFF1A\u8FF7\u8D70\u5F20\u529B = 5/(1+e^(\u2212(MAP\u2212130)/8))\uFF1B\u57FA\u7840\u4EA4\u611F\u5F20\u529B\u6052\u5B9A\u3002</p>
   <div class="setting-row"><div><strong>\u7ED9\u836F\u6CE2\u52A8\u4E0E\u8BB0\u5F55\u566A\u58F0</strong><small>\u5173\u95ED\u540E\u6548\u529B\u53C2\u6570\u53D6\u540D\u4E49\u503C\u3001\u6CE8\u5C04\u4E0E\u5FC3\u7387\u65E0\u968F\u673A\u6CE2\u52A8\uFF08\u7528\u4E8E\u7CBE\u786E\u590D\u73B0\u5B9E\u9A8C\uFF09</small></div><input id="noise-toggle" type="checkbox" ${state?.noise ? "checked" : ""}></div>
+  <div class="setting-row"><div><strong>\u6B7B\u4EA1\u540E\u66F2\u7EBF\u62C9\u5E73</strong><small>\u9ED8\u8BA4\u4FDD\u6301\u539F\u7248\u5BA4\u98A4\u884C\u4E3A\uFF08\u6B7B\u4EA1\u540E\u5FC3\u6536\u7F29\u529B\u4ECD\u663E\u793A\u6742\u4E71\u6CE2\u52A8\uFF09\uFF1B\u5F00\u542F\u540E\u6B7B\u4EA1\u77AC\u95F4 LVP/HF/HR \u5168\u901A\u9053\u62C9\u5E73\uFF0C\u6559\u5B66\u4E0A\u66F4\u76F4\u89C2\uFF0C\u4F46\u504F\u79BB\u539F\u7248</small></div><input id="flatten-toggle" type="checkbox" ${state?.flattenAfterDeath ? "checked" : ""}></div>
   <div class="setting-row"><div><strong>\u968F\u673A\u79CD\u5B50</strong><small>\u4FEE\u6539\u540E\u70B9\u51FB\u300C\u5E94\u7528\u300D\u4EE5\u65B0\u79CD\u5B50\u91CD\u5EFA\u5B9E\u9A8C</small></div><input id="seed-input" class="seed-input" type="number" value="${state?.seed ?? 0}"></div>
   <button id="apply-settings" class="button primary" type="button">\u5E94\u7528\uFF08\u91CD\u5EFA\u5B9E\u9A8C\uFF09</button>
   <p class="model-note">\u6A21\u578B\u7248\u672C ${MODEL_VERSION} \xB7 \u79FB\u690D\u81EA RatCVS 3.3.7 (30.07.20) \xB7 \u539F\u7248 (c) J. Dempster, University of Strathclyde\u3002\u539F\u7248\u201C\u523A\u6FC0\u5FC3\u4EA4\u611F\u795E\u7ECF\u201D\u56E0 iSympHeart \u672A\u8D4B\u503C\u5B9E\u9645\u6CE8\u5165\u80BE\u4E0A\u817A\u7D20\uFF0C\u672C\u7248\u6309\u539F\u7248\u884C\u4E3A\u590D\u523B\u3002</p>`;
   openDialog("\u539F\u7406\u4E0E\u8BBE\u7F6E", settingsHtml);
   $("#noise-toggle").addEventListener("change", (event) => send("noise", { value: event.target.checked }));
+  $("#flatten-toggle").addEventListener("change", (event) => send("flatten", { value: event.target.checked }));
   $("#apply-settings").addEventListener("click", () => {
     const seed = Number($("#seed-input").value) >>> 0;
     if (!confirm("\u4EE5\u65B0\u79CD\u5B50\u91CD\u5EFA\u5B9E\u9A8C\uFF1F\u5F53\u524D\u8BB0\u5F55\u5C06\u88AB\u6E05\u9664\u3002")) return;
@@ -663,6 +742,138 @@ function renderSettingsDialog() {
     dialog.close();
   });
 }
+function parseDose(text) {
+  const m = text.match(/([A-Za-z0-9]+) ([\d.]+) (ug|mg)\/kg/);
+  if (!m) return null;
+  return { short: m[1], mgkg: Number(m[2]) * (m[3] === "ug" ? 1e-3 : 1) };
+}
+function computeDoseResponse() {
+  const doseEvents = events.filter((e) => e.kind === "dose" && parseDose(e.text));
+  const rows = [];
+  doseEvents.forEach((ev, i) => {
+    const parsed = parseDose(ev.text);
+    const nextT = doseEvents[i + 1]?.t ?? frames.at(-1)?.t ?? ev.t;
+    const winPre = frames.filter((f) => f.t >= ev.t - 3 && f.t <= ev.t);
+    const winPost = frames.filter((f) => f.t >= ev.t + 3 && f.t <= Math.min(nextT, ev.t + 20));
+    if (!winPre.length || !winPost.length) return;
+    const mean = (arr, k) => arr.reduce((a, f) => a + f[k], 0) / arr.length;
+    const pre = mean(winPre, "abp");
+    const post = mean(winPost, "abp");
+    rows.push({
+      drug: parsed.short,
+      dose: parsed.mgkg,
+      t: ev.t,
+      pre: Math.round(pre * 10) / 10,
+      post: Math.round(post * 10) / 10,
+      peak: Math.round(Math.max(...winPost.map((f) => f.abp)) * 10) / 10,
+      dAbp: Math.round((post - pre) * 10) / 10,
+      hrPre: Math.round(mean(winPre, "hr")),
+      hrPost: Math.round(mean(winPost, "hr"))
+    });
+  });
+  return rows;
+}
+$("#dose-tool-button")?.addEventListener("click", () => {
+  const rows = computeDoseResponse();
+  const table = rows.map((r) => `<tr><td>${r.drug}</td><td class="num">${r.dose < 1 ? `${(r.dose * 1e3).toFixed(0)} \xB5g/kg` : `${r.dose} mg/kg`}</td><td class="num">${r.pre}</td><td class="num">${r.post}</td><td class="num">${r.peak}</td><td class="num">${r.dAbp > 0 ? "+" : ""}${r.dAbp}</td><td class="num">${r.hrPre}\u2192${r.hrPost}</td></tr>`).join("");
+  openDialog("\u91CF\u6548\u66F2\u7EBF", `
+    <p>\u6309\u7ED9\u836F\u4E8B\u4EF6\u81EA\u52A8\u8BA1\u7B97:\u7ED9\u836F\u524D 3 s \u5747\u503C \u2192 \u7ED9\u836F\u540E 3~20 s \u5747\u503C/\u5CF0\u503C(\u0394ABP = \u540E-\u524D)\u3002\u540C\u4E00\u5242\u91CF\u591A\u6B21\u7ED9\u836F\u9010\u884C\u5217\u51FA\u3002</p>
+    <table class="work-table"><thead><tr><th>\u836F\u7269</th><th>\u5242\u91CF</th><th>\u7ED9\u836F\u524D ABP</th><th>\u7ED9\u836F\u540E ABP</th><th>\u5CF0\u503C</th><th>\u0394ABP</th><th>HR \u524D\u2192\u540E</th></tr></thead><tbody>${rows.map((r) => r).length ? table : '<tr><td colspan="7">\u672C\u6B21\u5B9E\u9A8C\u5C1A\u65E0\u7ED9\u836F\u8BB0\u5F55</td></tr>'}</tbody></table>
+    <div class="dose-plot-wrap"><canvas id="dose-canvas" width="720" height="260"></canvas></div>
+    <p class="micro-note">\u6A2A\u8F74\u4E3A\u5BF9\u6570\u5242\u91CF,\u7EB5\u8F74\u4E3A \u0394ABP;\u6563\u70B9\u6765\u81EA\u4E0A\u8868\u3002\u5242\u91CF\u76F8\u540C\u89C6\u4E3A\u91CD\u590D\u70B9\u3002</p>
+    <button id="dose-csv-button" class="button secondary" type="button">\u5BFC\u51FA\u91CF\u6548\u6570\u636E CSV</button>`);
+  const cv = document.querySelector("#dose-canvas");
+  if (cv && rows.length) {
+    const c2 = cv.getContext("2d");
+    c2.fillStyle = "#fff";
+    c2.fillRect(0, 0, 720, 260);
+    const usable = rows.filter((r) => r.dose > 0);
+    const logMin = Math.log10(Math.min(...usable.map((r) => r.dose))) - 0.2;
+    const logMax = Math.log10(Math.max(...usable.map((r) => r.dose))) + 0.2;
+    const ys = rows.map((r) => r.dAbp);
+    const yMin = Math.min(...ys, -5), yMax = Math.max(...ys, 5);
+    const X = (d) => 50 + (Math.log10(d) - logMin) / (logMax - logMin) * 650;
+    const Y = (v) => 230 - (v - yMin) / (yMax - yMin) * 200;
+    c2.strokeStyle = "#aab3bc";
+    c2.beginPath();
+    c2.moveTo(40, Y(0));
+    c2.lineTo(710, Y(0));
+    c2.stroke();
+    c2.fillStyle = "#606970";
+    c2.font = "10px Consolas";
+    c2.textAlign = "center";
+    for (const r of usable) {
+      const x = X(r.dose);
+      c2.strokeStyle = "#e7eaee";
+      c2.beginPath();
+      c2.moveTo(x, 20);
+      c2.lineTo(x, 235);
+      c2.stroke();
+      c2.fillText(`${r.dose < 1 ? (r.dose * 1e3).toFixed(0) + "\xB5g" : r.dose + "mg"}`, x, 246);
+    }
+    for (const r of rows) if (r.dose > 0) {
+      c2.fillStyle = "#b03a2e";
+      c2.beginPath();
+      c2.arc(X(r.dose), Y(r.dAbp), 5, 0, Math.PI * 2);
+      c2.fill();
+    }
+    c2.fillStyle = "#606970";
+    c2.textAlign = "left";
+    c2.fillText("\u0394ABP mmHg", 8, 16);
+  }
+  document.querySelector("#dose-csv-button")?.addEventListener("click", () => {
+    const csv = [
+      "\u836F\u7269,\u5242\u91CF_mg/kg,\u7ED9\u836F\u524DABP,\u7ED9\u836F\u540EABP,\u5CF0\u503C,\u0394ABP,HR\u524D,HR\u540E",
+      ...rows.map((r) => `${r.drug},${r.dose},${r.pre},${r.post},${r.peak},${r.dAbp},${r.hrPre},${r.hrPost}`)
+    ].join("\r\n");
+    download(new Blob(["\uFEFF" + csv], { type: "text/csv" }), filename("dose.csv"));
+  });
+});
+let workRows = [];
+function renderWorksheet() {
+  const table = workRows.map((r, i) => `<tr><td>${i + 1}</td><td class="num">${r.t.toFixed(2)}</td><td class="num">${r.abp.toFixed(1)}</td><td class="num">${r.lvp.toFixed(1)}</td><td class="num">${r.vbp.toFixed(1)}</td><td class="num">${r.hf.toFixed(1)}</td><td class="num">${r.hr.toFixed(0)}</td></tr>`).join("");
+  return void table;
+}
+$("#worksheet-button")?.addEventListener("click", () => {
+  openDialog("\u6D4B\u91CF\u5DE5\u4F5C\u8868", `
+    <p>\u70B9\u51FB\u66F2\u7EBF\u653E\u7F6E\u7EFF\u8272\u5149\u6807,\u518D\u70B9\u300C\u52A0\u5165\u5149\u6807\u8BFB\u6570\u300D\u9010\u884C\u8BB0\u5F55;\u5BFC\u51FA CSV \u4EA4\u4F5C\u4E1A\u6216\u4F5C\u56FE\u3002</p>
+    <table class="work-table"><thead><tr><th>#</th><th>\u65F6\u95F4 s</th><th>ABP</th><th>LVP</th><th>VBP</th><th>HF</th><th>HR</th></tr></thead><tbody id="work-body">${workRows.map((r, i) => `<tr><td>${i + 1}</td><td class="num">${r.t.toFixed(2)}</td><td class="num">${r.abp.toFixed(1)}</td><td class="num">${r.lvp.toFixed(1)}</td><td class="num">${r.vbp.toFixed(1)}</td><td class="num">${r.hf.toFixed(1)}</td><td class="num">${r.hr.toFixed(0)}</td></tr>`).join("") || '<tr><td colspan="7">\u6682\u65E0\u8BB0\u5F55</td></tr>'}</tbody></table>
+    <div style="display:flex;gap:10px;margin-top:12px">
+      <button id="work-add" class="button secondary" type="button">\u52A0\u5165\u5149\u6807\u8BFB\u6570</button>
+      <button id="work-clear" class="button ghost" type="button">\u6E05\u7A7A</button>
+      <button id="work-csv" class="button primary" type="button">\u5BFC\u51FA CSV</button>
+    </div>`);
+  const refresh = () => {
+    document.querySelector("#work-body").innerHTML = workRows.map((r, i) => `<tr><td>${i + 1}</td><td class="num">${r.t.toFixed(2)}</td><td class="num">${r.abp.toFixed(1)}</td><td class="num">${r.lvp.toFixed(1)}</td><td class="num">${r.vbp.toFixed(1)}</td><td class="num">${r.hf.toFixed(1)}</td><td class="num">${r.hr.toFixed(0)}</td></tr>`).join("");
+  };
+  document.querySelector("#work-add")?.addEventListener("click", () => {
+    const t = cursorTime ?? frames.at(-1)?.t;
+    if (t === void 0) {
+      toast("\u8BF7\u5148\u70B9\u51FB\u66F2\u7EBF\u653E\u7F6E\u6D4B\u91CF\u5149\u6807");
+      return;
+    }
+    const f = frameAtTime(t);
+    if (f) {
+      workRows.push(f);
+      refresh();
+    }
+  });
+  document.querySelector("#work-clear")?.addEventListener("click", () => {
+    workRows = [];
+    refresh();
+  });
+  document.querySelector("#work-csv")?.addEventListener("click", () => {
+    if (!workRows.length) {
+      toast("\u5DE5\u4F5C\u8868\u4E3A\u7A7A");
+      return;
+    }
+    const csv = [
+      "\u5E8F\u53F7,\u65F6\u95F4_s,ABP_mmHg,LVP_mmHg,VBP_mmHg,HF,HR_bpm",
+      ...workRows.map((r, i) => `${i + 1},${r.t.toFixed(2)},${r.abp.toFixed(1)},${r.lvp.toFixed(1)},${r.vbp.toFixed(1)},${r.hf.toFixed(1)},${r.hr.toFixed(0)}`)
+    ].join("\r\n");
+    download(new Blob(["\uFEFF" + csv], { type: "text/csv" }), filename("worksheet.csv"));
+  });
+});
 setInterval(() => {
   if (state && state.points > 0) send("snapshot", { purpose: "autosave" });
 }, 2e4);

@@ -216,6 +216,9 @@ function renderHistorySlider() {
 setInterval(() => {
   try {
     tickReplay();
+    const stale = !!state && !!state.running && Date.now() - lastDataAt > 1e4;
+    if (stale) setStatus("\u6559\u5E08\u7AEF\u8FDE\u63A5\u5DF2\u4E2D\u65AD\uFF0C\u7B49\u5F85\u6062\u590D\u2026", false);
+    else if (state?.running) setStatus("\u5B9E\u65F6\u8DDF\u968F\u8001\u5E08\u7AEF", true);
     renderHistorySlider();
     renderHeader();
     renderEvents();
@@ -238,14 +241,43 @@ function applyUpdate(reset, message) {
   }
   dirty = true;
 }
+const followRoom = new URLSearchParams(location.search).get("room") ?? "";
 let seenSeq = -1, sentF = 0, sentE = 0, polling = false;
 let pollTimer;
 let pollIntervalMs = 1500;
+let es = null;
+let sseFailed = false;
+let lastDataAt = Date.now();
+let staleNotified = false;
 function setPollInterval(ms) {
   if (pollIntervalMs === ms) return;
   pollIntervalMs = ms;
   clearInterval(pollTimer);
   pollTimer = setInterval(poll, ms);
+}
+function sseHandle(m) {
+  lastDataAt = Date.now();
+  if (m.type === "off") {
+    applyUpdate(true, { state: null, frames: [], events: [] });
+    setStatus("\u8001\u5E08\u7AEF\u5C1A\u672A\u5F00\u59CB\u5E7F\u64AD\uFF0C\u7B49\u5F85\u4E2D\u2026", false);
+    return;
+  }
+  applyUpdate(m.type === "full", m);
+  setStatus("\u5B9E\u65F6\u8DDF\u968F\u8001\u5E08\u7AEF", true);
+  staleNotified = false;
+}
+function connectSSE() {
+  if (sseFailed || !followRoom || es) return;
+  es = new EventSource(`/api/follow?room=${encodeURIComponent(followRoom)}`);
+  es.addEventListener("backfill", (e) => sseHandle(JSON.parse(e.data)));
+  es.addEventListener("chunk", (e) => sseHandle(JSON.parse(e.data)));
+  es.onerror = () => {
+    es?.close();
+    es = null;
+    sseFailed = true;
+    setPollInterval(1e3);
+    poll();
+  };
 }
 async function poll() {
   if (polling) return;
@@ -253,17 +285,18 @@ async function poll() {
   const ctrl = new AbortController();
   const kill = setTimeout(() => ctrl.abort(), 3e3);
   try {
-    const res = await fetch(`/api/poll?f=${sentF}&e=${sentE}&seq=${seenSeq}`, { cache: "no-store", signal: ctrl.signal });
+    const res = await fetch(`/api/poll?room=${encodeURIComponent(followRoom)}&f=${sentF}&e=${sentE}&seq=${seenSeq}`, { cache: "no-store", signal: ctrl.signal });
     if (!res.ok) throw new Error(String(res.status));
     const data = await res.json();
     seenSeq = data.seq;
     applyUpdate(!!data.reset || !data.state, data);
     sentF = data.totalAbs;
     sentE = data.totalE;
+    lastDataAt = Date.now();
     if (data.state) {
       const stale = Date.now() - (data.updatedAt ?? 0) > 1e4;
       setStatus(stale ? "\u6559\u5E08\u7AEF\u8FDE\u63A5\u5DF2\u4E2D\u65AD\uFF0C\u7B49\u5F85\u6062\u590D\u2026" : "\u5B9E\u65F6\u8DDF\u968F\u8001\u5E08\u7AEF", !stale);
-      setPollInterval(stale ? 1500 : 50);
+      setPollInterval(stale ? 1500 : 1e3);
     } else {
       setStatus("\u8001\u5E08\u7AEF\u5C1A\u672A\u5F00\u59CB\u5E7F\u64AD\uFF0C\u7B49\u5F85\u4E2D\u2026", false);
       setPollInterval(1500);
@@ -276,5 +309,26 @@ async function poll() {
     polling = false;
   }
 }
-pollTimer = setInterval(poll, pollIntervalMs);
-poll();
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") {
+    if (es) {
+      es.close();
+      es = null;
+    }
+    setPollInterval(2e3);
+  } else if (!sseFailed) {
+    connectSSE();
+    poll();
+  } else {
+    setPollInterval(1e3);
+    poll();
+  }
+});
+if (!followRoom) {
+  setStatus("\u8BF7\u4F7F\u7528\u8001\u5E08\u5206\u4EAB\u7684\u8DDF\u968F\u94FE\u63A5\u8FDB\u5165\uFF08\u94FE\u63A5\u542B ?room= \u53C2\u6570\uFF09", false);
+  $("#plot-empty").classList.add("hidden");
+  $("#plot-empty").innerHTML = "<strong>\u672A\u6307\u5B9A\u8DDF\u968F\u623F\u95F4</strong><span>\u8BF7\u4ECE\u8001\u5E08\u5E7F\u64AD\u63D0\u793A\u7684\u94FE\u63A5\u8FDB\u5165,\u6216\u8BA9\u8001\u5E08\u91CD\u65B0\u5206\u4EAB\u8DDF\u968F\u5730\u5740\u3002</span>";
+} else {
+  connectSSE();
+  poll();
+}

@@ -183,10 +183,13 @@ function renderHistorySlider(): void {
 }
 
 // 跟随页可能处于后台标签/低频渲染环境：用固定间隔驱动，不依赖 requestAnimationFrame
-// 曲线以回放速率匀速推进(10Hz 重绘),不再依赖数据到达的批次节奏
+// 曲线以回放速率匀速推进(10Hz 重绘);教师推送中断 >10s 时冻结并提示
 setInterval(() => {
   try {
     tickReplay();
+    const stale = !!state && !!state.running && Date.now() - lastDataAt > 10000;
+    if (stale) setStatus('教师端连接已中断，等待恢复…', false);
+    else if (state?.running) setStatus('实时跟随老师端', true);
     renderHistorySlider();
     renderHeader();
     renderEvents();
@@ -213,17 +216,53 @@ function applyUpdate(reset: boolean, message: any): void {
   dirty = true;
 }
 
-// HTTP 轮询：增量拉取老师端状态。
-// 自适应间隔:跟随中 0.05 s(水位充足),等待开播/连接中断 1.5 s 减负
+// ============================================================
+// 跟随传输:SSE 长连接为主(每学生 1 条常驻连接,大幅降低课堂 Wi-Fi
+// 空口压力),轮询自动回退;房间隔离(room=),页面隐藏时自动降级。
+// ============================================================
+const followRoom = new URLSearchParams(location.search).get('room') ?? '';
 let seenSeq = -1, sentF = 0, sentE = 0, polling = false;
 let pollTimer: ReturnType<typeof setInterval> | undefined;
 let pollIntervalMs = 1500;
+let es: EventSource | null = null;
+let sseFailed = false;
+let lastDataAt = Date.now();
+let staleNotified = false;
+
 function setPollInterval(ms: number): void {
   if (pollIntervalMs === ms) return;
   pollIntervalMs = ms;
   clearInterval(pollTimer);
   pollTimer = setInterval(poll, ms);
 }
+
+function sseHandle(m: any): void {
+  lastDataAt = Date.now();
+  if (m.type === 'off') {
+    // 教师停止广播:回到等待空态
+    applyUpdate(true, { state: null, frames: [], events: [] });
+    setStatus('老师端尚未开始广播，等待中…', false);
+    return;
+  }
+  applyUpdate(m.type === 'full', m);
+  setStatus('实时跟随老师端', true);
+  staleNotified = false;
+}
+
+function connectSSE(): void {
+  if (sseFailed || !followRoom || es) return;
+  es = new EventSource(`/api/follow?room=${encodeURIComponent(followRoom)}`);
+  es.addEventListener('backfill', e => sseHandle(JSON.parse((e as MessageEvent).data)));
+  es.addEventListener('chunk', e => sseHandle(JSON.parse((e as MessageEvent).data)));
+  es.onerror = () => {
+    // SSE 不可用(代理/服务异常)→ 本次会话降级为轮询
+    es?.close(); es = null;
+    sseFailed = true;
+    setPollInterval(1000);
+    poll();
+  };
+}
+
 async function poll(): Promise<void> {
   if (polling) return;
   polling = true;
@@ -232,19 +271,18 @@ async function poll(): Promise<void> {
   const ctrl = new AbortController();
   const kill = setTimeout(() => ctrl.abort(), 3000);
   try {
-    const res = await fetch(`/api/poll?f=${sentF}&e=${sentE}&seq=${seenSeq}`, { cache: 'no-store', signal: ctrl.signal });
+    const res = await fetch(`/api/poll?room=${encodeURIComponent(followRoom)}&f=${sentF}&e=${sentE}&seq=${seenSeq}`, { cache: 'no-store', signal: ctrl.signal });
     if (!res.ok) throw new Error(String(res.status));
     const data = await res.json();
     seenSeq = data.seq;
     applyUpdate(!!data.reset || !data.state, data);
     // f 为绝对帧号(服务器窗口滑动挤出旧帧时自动重置)
     sentF = data.totalAbs; sentE = data.totalE;
+    lastDataAt = Date.now();
     if (data.state) {
-      // 教师端推送陈旧(>10s 未更新,如页面崩溃/网络中断)→ 提示等待恢复;
-      // 回放缓冲会自然排空,曲线与时间停在最后时刻
       const stale = Date.now() - (data.updatedAt ?? 0) > 10000;
       setStatus(stale ? '教师端连接已中断，等待恢复…' : '实时跟随老师端', !stale);
-      setPollInterval(stale ? 1500 : 50);
+      setPollInterval(stale ? 1500 : 1000);
     }
     else { setStatus('老师端尚未开始广播，等待中…', false); setPollInterval(1500); }
   } catch {
@@ -255,5 +293,27 @@ async function poll(): Promise<void> {
     polling = false;
   }
 }
-pollTimer = setInterval(poll, pollIntervalMs);
-poll();
+
+// 页面隐藏自动降级:关闭 SSE / 轮询退到 2s,回到前台恢复
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') {
+    if (es) { es.close(); es = null; }
+    setPollInterval(2000);
+  } else if (!sseFailed) {
+    connectSSE();
+    poll();
+  } else {
+    setPollInterval(1000);
+    poll();
+  }
+});
+
+if (!followRoom) {
+  // 直接打开跟随页而未带房间参数
+  setStatus('请使用老师分享的跟随链接进入（链接含 ?room= 参数）', false);
+  $('#plot-empty').classList.add('hidden');
+  $('#plot-empty').innerHTML = '<strong>未指定跟随房间</strong><span>请从老师广播提示的链接进入,或让老师重新分享跟随地址。</span>';
+} else {
+  connectSSE();
+  poll();
+}

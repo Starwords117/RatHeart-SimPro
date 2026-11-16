@@ -243,6 +243,27 @@ near('显示点间隔', POINT_DT, 0.0125, 1e-12);
   record('截断 .rat 被拒绝', e.importRAT(truncated.buffer.slice(truncated.byteOffset, truncated.byteOffset + truncated.byteLength)) === false, false, true);
 }
 
+// ---------- 死亡后曲线拉平开关 ----------
+{
+  const e = new Experiment(true, 42, false);
+  e.advance(15);
+  e.inject('digoxin', 100);
+  e.advance(60);
+  ok('地高辛致死(默认室颤行为)', e.state.dead && e.trace.at(-1).hr > 100, e.trace.at(-1).hr, '>100(室颤波形)');
+  const on = new Experiment(true, 42, false);
+  on.setFlattenAfterDeath(true);
+  on.advance(15);
+  on.inject('digoxin', 100);
+  on.advance(60);
+  const tail = on.trace.slice(-400);
+  ok('死亡后拉平开关:LVP/HF/HR 全通道为 0',
+    on.state.dead && tail.every(f => f.lvp === 0 && f.hf === 0 && f.hr === 0),
+    'flat tail', true);
+  on.setFlattenAfterDeath(false);
+  on.advance(5);
+  ok('拉平可实时关闭(恢复室颤波形)', on.trace.at(-1).hr > 100, on.trace.at(-1).hr, '>100');
+}
+
 // ---------- 原版缺陷复刻：心交感刺激注入肾上腺素 ----------
 {
   const e = new Experiment(true, 42, false);

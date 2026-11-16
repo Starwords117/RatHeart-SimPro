@@ -331,3 +331,13 @@ dialog::backdrop { background: #0006; }
 .events-card .event-list { flex: 1; min-height: 120px; height: auto; }
 /* 跟随页:实验记录列表内边距(与实验台观感一致) */
 .follow-events .event-list { padding: 6px 14px 10px; }
+
+/* 对比叠加 chips */
+.overlay-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 16px 0; }
+.overlay-chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border: 1px solid #cdd2d7; background: #fff; font-size: 11px; }
+.overlay-chip button { border: none; background: none; cursor: pointer; color: inherit; font-size: 12px; padding: 0; }
+/* 工作表/量效表格 */
+.work-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+.work-table th, .work-table td { border: 1px solid #cdd2d7; padding: 5px 8px; text-align: center; font-family: Consolas, "Microsoft YaHei", monospace; }
+.work-table th { background: #f6f7f8; }
+.work-table td.num { text-align: right; }

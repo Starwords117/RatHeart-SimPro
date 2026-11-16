@@ -50,7 +50,8 @@
       }
     ],
     "category": "Education",
-    "executableName": "ratheart-simpro"
+    "executableName": "ratheart-simpro",
+    "syncDesktopName": true
   },
   "mac": {
     "target": [

@@ -1,0 +1,50 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci
+      - run: npm run check
+      - run: npm run build
+      - run: npm test
+      # 三平台安装包(zip 目标全平台可构建;Linux 构建机亦可产出 deb/AppImage)
+      - run: npx electron-builder --win --x64 --publish never
+      - run: npx electron-builder --linux --x64 --publish never
+      - run: npx electron-builder --mac zip --x64 --arm64 --publish never
+      - name: 生成 SHA256SUMS
+        run: |
+          cd release
+          sha256sum RatHeart-SimPro-*-x64-Setup.exe RatHeart-SimPro-*-x64-Portable.exe \
+            RatHeart-SimPro-*-x86_64-AppImage ratheart-simpro_*_amd64.deb \
+            RatHeart-SimPro-*-mac.zip RatHeart-SimPro-*-arm64-mac.zip > SHA256SUMS.txt
+      - name: 上传到 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/RatHeart-SimPro-*.exe
+            release/RatHeart-SimPro-*.AppImage
+            release/ratheart-simpro-*.deb
+            release/ratheart-simpro_*.deb
+            release/RatHeart-SimPro-*.zip
+            release/SHA256SUMS.txt
+          generate_release_notes: true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: installers
+          path: |
+            release/RatHeart-SimPro-*
+            release/SHA256SUMS.txt
+          retention-days: 7

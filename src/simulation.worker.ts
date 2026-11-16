@@ -12,18 +12,17 @@ let sentFrames = 0, sentEvents = 0;
 let last = performance.now(), budget = 0;
 
 // Online 授课广播
-// 窗口化推送:只发最近 18000 帧窗口(与服务器窗口一致),避免恢复长实验后
-// 整条 trace(可达十几 MB)超过服务器 8MB 上限被销毁——那会导致学生端
-// 只收到 state 而收不到帧/事件。bSentFrames 记录已推送到的绝对下标;
-// 教师重建实验(下标回退)或未发帧被窗口挤出时,自动改推全量窗口并递增 seq
-// (学生端 seq 不匹配 → 重置,拿到新窗口)。
+// 房间隔离:每位教师一个 room(学生 follow.html?room=xxx);token 为教师
+// 令牌(首次推送建立所有权,学生只读无法伪造)。推送窗口化:只发最近
+// 18000 帧窗口(与服务器窗口一致),避免恢复长实验后整条 trace 超限被销毁。
 const BROADCAST_WINDOW = 18000;
 let broadcastOn = false, broadcastSeq = 0, bSentFrames = 0, bSentEvents = 0, lastBroadcast = 0, broadcastFull = false;
+let broadcastRoom = '', broadcastToken = '';
 function broadcastNow(): void {
   const traceLen = experiment.trace.length;
   const windowStart = Math.max(0, traceLen - BROADCAST_WINDOW);
   const needFull = broadcastFull || bSentFrames > traceLen || bSentFrames < windowStart;
-  let payload;
+  let payload: any;
   if (needFull) {
     payload = { type: 'full', seq: ++broadcastSeq, state: experiment.state, frames: experiment.trace.slice(windowStart), events: experiment.events };
     bSentFrames = traceLen; bSentEvents = experiment.events.length;
@@ -31,6 +30,8 @@ function broadcastNow(): void {
     payload = { type: 'chunk', seq: broadcastSeq, state: experiment.state, frames: experiment.trace.slice(bSentFrames), events: experiment.events.slice(bSentEvents) };
     bSentFrames = traceLen; bSentEvents = experiment.events.length;
   }
+  payload.room = broadcastRoom;
+  payload.token = broadcastToken;
   broadcastFull = false;
   scope.fetch('/api/broadcast', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) })
     .then((r: any) => r.json())
@@ -72,6 +73,7 @@ scope.onmessage = (event: MessageEvent) => {
     case 'stimulate': experiment.stimulate(m.pathway); send(); break;
     case 'model': experiment.setPithed(m.value); send(); break;
     case 'noise': experiment.setNoise(m.value); send(); break;
+    case 'flatten': experiment.setFlattenAfterDeath(m.value); send(); break;
     case 'snapshot': scope.postMessage({ type: 'snapshot', purpose: m.purpose ?? 'download', snapshot: experiment.exportSnapshot() }); break;
     case 'csv': scope.postMessage({ type: 'csv', trace: experiment.trace, events: experiment.events }); break;
     case 'rat-export': scope.postMessage({ type: 'rat', buffer: experiment.exportRAT() }); break;
@@ -85,9 +87,18 @@ scope.onmessage = (event: MessageEvent) => {
         else scope.postMessage({ type: 'file-error' });
       } catch (error) { console.error(error); scope.postMessage({ type: 'file-error' }); }
       break;
-    case 'broadcast-on': broadcastOn = true; broadcastSeq += 1; bSentFrames = 0; bSentEvents = 0; broadcastFull = true; lastBroadcast = 0; broadcastNow(); break;
-    // 关闭广播需回执,否则界面按钮状态不翻转
-    case 'broadcast-off': broadcastOn = false; scope.postMessage({ type: 'broadcast', on: false, followers: 0 }); break;
+    case 'broadcast-on':
+      broadcastRoom = m.room ?? ''; broadcastToken = m.token ?? '';
+      broadcastOn = true; broadcastSeq += 1; bSentFrames = 0; bSentEvents = 0; broadcastFull = true; lastBroadcast = 0; broadcastNow(); break;
+    // 关闭广播需回执,否则界面按钮状态不翻转;同时通知服务器清空房间会话
+    case 'broadcast-off': {
+      broadcastOn = false;
+      scope.fetch('/api/broadcast-off', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ room: broadcastRoom, token: broadcastToken }) })
+        .then((r: any) => r.json())
+        .catch(() => { /* 服务器不可达时 GC 会兜底 */ });
+      scope.postMessage({ type: 'broadcast', on: false, followers: 0 });
+      break;
+    }
   }
 };
 
@@ -96,8 +107,9 @@ scope.onmessage = (event: MessageEvent) => {
 setInterval(() => {
   const now = performance.now();
   const elapsed = Math.min((now - last) / 1000, 0.5); last = now;
-  // 推送节奏 150ms:配合学生端 0.1s 轮询,跟随延迟约 ≤0.3 s
-  if (broadcastOn && (broadcastFull || now - lastBroadcast >= 150 || experiment.trace.length > bSentFrames + 200)) {
+  // 推送节奏 1s:配合学生端 SSE 长连接(或轮询回退),跟随延迟约 ≤1s,
+  // 大幅降低课堂 Wi-Fi 空口压力(平滑性由学生端回放缓冲保证)
+  if (broadcastOn && (broadcastFull || now - lastBroadcast >= 1000 || experiment.trace.length > bSentFrames + 40)) {
     lastBroadcast = now;
     broadcastNow();
   }

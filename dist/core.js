@@ -55,6 +55,7 @@ class Experiment {
       pithed,
       recorderStarted: false,
       historyOnly: false,
+      flattenAfterDeath: false,
       time: 0,
       points: 0,
       running: false,
@@ -168,6 +169,10 @@ class Experiment {
   setNoise(noise) {
     this.state.noise = noise;
     this.addEvent("setting", noise ? "\u5F00\u542F\u7ED9\u836F\u6CE2\u52A8\u4E0E\u8BB0\u5F55\u566A\u58F0" : "\u5173\u95ED\u7ED9\u836F\u6CE2\u52A8\u4E0E\u8BB0\u5F55\u566A\u58F0\uFF08\u5F53\u524D\u836F\u7269\u6548\u529B\u4E0D\u53D8\uFF09");
+  }
+  setFlattenAfterDeath(v) {
+    this.state.flattenAfterDeath = v;
+    this.addEvent("setting", v ? "\u5F00\u542F\u6B7B\u4EA1\u540E\u66F2\u7EBF\u62C9\u5E73\uFF08\u504F\u79BB\u539F\u7248\u5BA4\u98A4\u884C\u4E3A\uFF09" : "\u5173\u95ED\u6B7B\u4EA1\u540E\u66F2\u7EBF\u62C9\u5E73\uFF08\u6062\u590D\u539F\u7248\u5BA4\u98A4\u884C\u4E3A\uFF09");
   }
   // ------------------------------------------------------------------
   // 受体与药物动力学更新（原版 CalculateTrace 的 t.next 块，每 5 ms）
@@ -327,12 +332,13 @@ class Experiment {
         s.dead = true;
       }
     }
-    const hrNoise = s.noise ? this.addNoise(0.05) : 1;
+    const flat = s.dead && s.flattenAfterDeath;
+    const hrNoise = s.noise && !flat ? this.addNoise(0.05) : 1;
     const t1 = s.points * SAMPLE_DT;
-    this.trace.push({ t: t1, abp: this.leading(art), lvp: this.leading(heart), vbp: this.leading(ven), hf: this.leadingCon(), hr: heart.rate * hrNoise });
+    this.trace.push({ t: t1, abp: this.leading(art), lvp: flat ? 0 : this.leading(heart), vbp: this.leading(ven), hf: flat ? 0 : this.leadingCon(), hr: flat ? 0 : heart.rate * hrNoise });
     s.points += 1;
     const t2 = s.points * SAMPLE_DT;
-    const frame = { t: t2, abp: this.trailing(art), lvp: this.trailing(heart), vbp: this.trailing(ven), hf: this.trailingCon(), hr: heart.rate };
+    const frame = { t: t2, abp: this.trailing(art), lvp: flat ? 0 : this.trailing(heart), vbp: this.trailing(ven), hf: flat ? 0 : this.trailingCon(), hr: flat ? 0 : heart.rate };
     this.trace.push(frame);
     s.points += 1;
     return frame;

@@ -182,6 +182,7 @@ function drawChart(): void {
   currentRange = { start, end, left, right, top, bottom, width, height };
   const visibleCount = end - start;
   const stride = Math.max(1, Math.floor(visibleCount / (plotW * 2)));
+  const ovDur = () => (frames[Math.min(end, frames.length) - 1]?.t ?? 0) - (frames[start]?.t ?? 0);
 
   // 事件标记（跨全部通道）
   context.save();
@@ -225,6 +226,10 @@ function drawChart(): void {
       const v = frames[i][key];
       if (v > ymax) ymax = v * 1.15;
     }
+    // 对比叠加峰值纳入量程(网格/曲线/叠加共用同一标度)
+    for (const ov of overlays) {
+      for (const f of ov.frames) if (f[key] > ymax) ymax = f[key] * 1.15;
+    }
     if (key === 'hr') ymax = Math.max(ymax, 400);
     const ymin = 0;
     const yOf = (v: number) => bandTop + bandH - ((v - ymin) / (ymax - ymin)) * bandH;
@@ -257,6 +262,30 @@ function drawChart(): void {
       context.font = '11px Consolas, monospace';
       const value = lastVisible[key];
       context.fillText(value.toFixed(key === 'hr' || key === 'abp' ? 0 : 1), width - right - 38, bandTop + 12);
+    }
+
+    // 对比叠加:半透明 ghost,按捕获窗口宽度左对齐当前窗口
+    if (overlays.length) {
+      const dur = ovDur();
+      if (dur > 0) {
+        context.save();
+        context.globalAlpha = 0.4;
+        context.lineWidth = 1.2;
+        for (const ov of overlays) {
+          const yOfO = (v: number) => bandTop + bandH - ((v - ymin) / (ymax - ymin)) * bandH;
+          context.strokeStyle = ov.color;
+          context.beginPath();
+          ov.frames.forEach((f, i) => {
+            const x = left + (f.t / dur) * plotW;
+            const y = yOfO(f[key]);
+            if (i === 0) context.moveTo(x, y); else context.lineTo(x, y);
+          });
+          context.stroke();
+        }
+        context.globalAlpha = 1;
+        context.lineWidth = 1;
+        context.restore();
+      }
     }
 
     // 波形（min/max 抽稀保留脉冲形状）
@@ -321,6 +350,35 @@ function drawChart(): void {
 }
 
 function animate(): void { if (dirty) { drawChart(); dirty = false; } requestAnimationFrame(animate); }
+
+// ---- 对比叠加:把当前显示窗口保存为快照,按窗口左对齐半透明重绘 ----
+const OVERLAY_COLORS = ['#8b5cf6', '#d97706', '#0d9488', '#dc2626', '#65a30d'];
+let overlays: { id: number; label: string; color: string; frames: Frame[] }[] = [];
+let overlaySeq = 0;
+$('#overlay-capture')?.addEventListener('click', () => {
+  const { start, end } = currentRange;
+  if (!frames.length || end - start < 10) { toast('暂无可截取的曲线'); return; }
+  const slice = frames.slice(start, end);
+  const stride = Math.max(1, Math.floor(slice.length / 2000));
+  const cap: Frame[] = [];
+  for (let i = 0; i < slice.length; i += stride) cap.push(slice[i]);
+  overlaySeq += 1;
+  const ov = { id: overlaySeq, label: `对比 ${overlaySeq}`, color: OVERLAY_COLORS[(overlaySeq - 1) % OVERLAY_COLORS.length], frames: cap.map(f => ({ ...f, t: f.t - slice[0].t })) };
+  overlays.push(ov);
+  renderOverlayChips();
+  toast(`已保存「${ov.label}」——半透明叠加显示,可叠加多组对比给药前后`);
+  dirty = true;
+});
+function renderOverlayChips(): void {
+  const box = $('#overlay-chips');
+  box.classList.toggle('hidden', overlays.length === 0);
+  box.innerHTML = overlays.map(o => `<span class="overlay-chip" style="border-color:${o.color};color:${o.color}">${o.label} <button data-id="${o.id}" aria-label="移除">×</button></span>`).join('');
+  box.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+    overlays = overlays.filter(o => o.id !== Number(b.dataset.id));
+    renderOverlayChips();
+    dirty = true;
+  }));
+}
 
 new ResizeObserver(() => { dirty = true; }).observe($('#plot-wrap'));
 requestAnimationFrame(animate);
@@ -480,15 +538,18 @@ function updateBroadcastButton(followers: number, error = false): void {
   }
   if (lanInfo.primaryFollow) {
     // 路由探测成功:只展示主地址,备用地址收进 ⓘ 图标
-    const others = lanInfo.follow.filter(u => u !== lanInfo.primaryFollow);
-    hint.innerHTML = `同学浏览器打开:<code>${lanInfo.primaryFollow}</code>(同一 Wi-Fi,实时跟随)`
-      + (others.length ? ` <span class="ip-toggle" id="ip-toggle" title="其他可能的地址">?</span><span class="ip-alt hidden">${others.map(u => `<code>${u}</code>`).join('、')}</span>` : '');
+    const info = lanInfo;
+    const roomQS = broadcastRoom ? `?room=${broadcastRoom}` : '';
+    const others = info.follow.filter(u => u !== info.primaryFollow);
+    hint.innerHTML = `同学浏览器打开:<code>${info.primaryFollow}${roomQS}</code>(同一 Wi-Fi,实时跟随)`
+      + (others.length ? ` <span class="ip-toggle" id="ip-toggle" title="其他可能的地址">?</span><span class="ip-alt hidden">${others.map(u => `<code>${u}${roomQS}</code>`).join('、')}</span>` : '');
     hint.querySelector('#ip-toggle')?.addEventListener('click', () => {
       hint.querySelector('.ip-alt')?.classList.toggle('hidden');
     });
   } else {
     // 探测失败(如教室无默认路由):多选一,优先第一个
-    hint.innerHTML = `同学浏览器打开(多选一,优先第一个):${lanInfo.follow.map(u => `<code>${u}</code>`).join('、')}(同一 Wi-Fi,实时跟随)`;
+    const roomQS = broadcastRoom ? `?room=${broadcastRoom}` : '';
+    hint.innerHTML = `同学浏览器打开(多选一,优先第一个):${lanInfo.follow.map(u => `<code>${u}${roomQS}</code>`).join('、')}(同一 Wi-Fi,实时跟随)`;
   }
 }
 
@@ -610,13 +671,32 @@ $('#concentration-button').addEventListener('click', () => {
 // web(http/https)与桌面版(ratheart://,内嵌广播服务器 + /api 代理)均支持
 const BROADCAST_CAPABLE = location.protocol.startsWith('http') || location.protocol === 'ratheart:';
 const broadcastButton = $<HTMLButtonElement>('#broadcast-button');
+// 房间隔离:每位教师一个房间(学生跟随链接携带 ?room=);token 为教师令牌,
+// 推送/停止时携带,学生只读无法伪造广播
+let broadcastRoom = localStorage.getItem('ratheart-room') ?? '';
+let broadcastToken = '';
+function genRoom(): string {
+  const abc = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  return [...crypto.getRandomValues(new Uint8Array(6))].map(b => abc[b % abc.length]).join('');
+}
+function genToken(): string {
+  return [...crypto.getRandomValues(new Uint8Array(16))].map(b => b.toString(16).padStart(2, '0')).join('');
+}
 if (BROADCAST_CAPABLE) {
   broadcastButton.classList.remove('hidden');
   broadcastButton.textContent = '开始授课广播';
   broadcastButton.addEventListener('click', () => {
-    // 停止广播时通知服务器清空会话,学生跟随页回到等待空态
-    if (broadcasting) fetch('/api/broadcast-off', { method: 'POST' }).catch(() => {});
-    send(broadcasting ? 'broadcast-off' : 'broadcast-on');
+    if (broadcasting) {
+      // worker 会携带 room+token 通知服务器清空房间会话
+      send('broadcast-off');
+    } else {
+      if (!broadcastRoom) {
+        broadcastRoom = genRoom();
+        localStorage.setItem('ratheart-room', broadcastRoom);
+      }
+      broadcastToken = genToken();
+      send('broadcast-on', { room: broadcastRoom, token: broadcastToken });
+    }
   });
   // 获取教学机局域网地址,开启广播后提示同学访问地址
   fetch('/api/lan', { cache: 'no-store' })
@@ -672,6 +752,7 @@ const HELP_HTML = `
   <li>「快进 30 s」可跳过药物起效等待（速度默认 0.25×，与原版走纸速度一致，可调高）。</li>
 </ol>
 <p><strong>五条通道</strong>：ABP 动脉血压、LVP 左心室内压、VBP 中心静脉压、HF 心收缩力、HR 心率。</p>
+<p><strong>教学工具</strong>：「＋对比」把当前窗口存为半透明叠加曲线(给药前后对照);「量效曲线」自动汇总各剂量的血压反应;「测量工作表」光标取数填表导出 CSV。可在「原理与设置」开启死亡后曲线拉平。</p>
 <p><strong>教学提示</strong>：动脉压长时间低于 20 mmHg 会导致大鼠死亡；大剂量地高辛（≥10 mg/kg）会诱发心室颤动，心脏停止射血。「未知药」A–K 供盲检练习——先测其作用，再用已知药物鉴别。</p>
 <p><strong>授课广播</strong>（仅网页模式）：教学机以 <code>npm start -- --lan</code> 启动后，点击「开始授课广播」，界面会显示局域网地址——同学浏览器打开该地址的 <code>/follow.html</code>（注意不是主页），即可实时跟随观看；学生就算误开主页，也会看到「进入跟随页」的提示横幅。停止广播后跟随页回到等待状态。</p>
 `;
@@ -683,12 +764,14 @@ function renderSettingsDialog(): void {
   <p><strong>血药动力学</strong>：dDose/dt = k_on·(Injected−Dose) − k_off·Dose；注射剂量带 ±10% 随机波动，效力参数带 ±50% 个体差异（与原版一致）。</p>
   <p><strong>压力感受器反射</strong>（仅正常大鼠）：迷走张力 = 5/(1+e^(−(MAP−130)/8))；基础交感张力恒定。</p>
   <div class="setting-row"><div><strong>给药波动与记录噪声</strong><small>关闭后效力参数取名义值、注射与心率无随机波动（用于精确复现实验）</small></div><input id="noise-toggle" type="checkbox" ${state?.noise ? 'checked' : ''}></div>
+  <div class="setting-row"><div><strong>死亡后曲线拉平</strong><small>默认保持原版室颤行为（死亡后心收缩力仍显示杂乱波动）；开启后死亡瞬间 LVP/HF/HR 全通道拉平，教学上更直观，但偏离原版</small></div><input id="flatten-toggle" type="checkbox" ${state?.flattenAfterDeath ? 'checked' : ''}></div>
   <div class="setting-row"><div><strong>随机种子</strong><small>修改后点击「应用」以新种子重建实验</small></div><input id="seed-input" class="seed-input" type="number" value="${state?.seed ?? 0}"></div>
   <button id="apply-settings" class="button primary" type="button">应用（重建实验）</button>
   <p class="model-note">模型版本 ${MODEL_VERSION} · 移植自 RatCVS 3.3.7 (30.07.20) · 原版 (c) J. Dempster, University of Strathclyde。原版“刺激心交感神经”因 iSympHeart 未赋值实际注入肾上腺素，本版按原版行为复刻。</p>`;
   // 先注入 DOM,再给动态元素挂监听(否则查询为 null)
   openDialog('原理与设置', settingsHtml);
   $('#noise-toggle').addEventListener('change', (event) => send('noise', { value: (event.target as HTMLInputElement).checked }));
+  $('#flatten-toggle').addEventListener('change', (event) => send('flatten', { value: (event.target as HTMLInputElement).checked }));
   $('#apply-settings').addEventListener('click', () => {
     const seed = Number($<HTMLInputElement>('#seed-input').value) >>> 0;
     if (!confirm('以新种子重建实验？当前记录将被清除。')) return;
@@ -696,6 +779,102 @@ function renderSettingsDialog(): void {
     dialog.close();
   });
 }
+
+// ---- 量效曲线:从给药事件解析剂量,自动计算给药前后反应 ----
+function parseDose(text: string): { short: string; mgkg: number } | null {
+  const m = text.match(/([A-Za-z0-9]+) ([\d.]+) (ug|mg)\/kg/);
+  if (!m) return null;
+  return { short: m[1], mgkg: Number(m[2]) * (m[3] === 'ug' ? 0.001 : 1) };
+}
+function computeDoseResponse(): { drug: string; dose: number; pre: number; post: number; peak: number; dAbp: number; hrPre: number; hrPost: number; t: number }[] {
+  const doseEvents = events.filter(e => e.kind === 'dose' && parseDose(e.text));
+  const rows: any[] = [];
+  doseEvents.forEach((ev, i) => {
+    const parsed = parseDose(ev.text)!;
+    const nextT = doseEvents[i + 1]?.t ?? frames.at(-1)?.t ?? ev.t;
+    const winPre = frames.filter(f => f.t >= ev.t - 3 && f.t <= ev.t);
+    const winPost = frames.filter(f => f.t >= ev.t + 3 && f.t <= Math.min(nextT, ev.t + 20));
+    if (!winPre.length || !winPost.length) return;
+    const mean = (arr: Frame[], k: keyof Frame) => arr.reduce((a, f) => a + (f[k] as number), 0) / arr.length;
+    const pre = mean(winPre, 'abp');
+    const post = mean(winPost, 'abp');
+    rows.push({
+      drug: parsed.short, dose: parsed.mgkg, t: ev.t,
+      pre: Math.round(pre * 10) / 10,
+      post: Math.round(post * 10) / 10,
+      peak: Math.round(Math.max(...winPost.map(f => f.abp)) * 10) / 10,
+      dAbp: Math.round((post - pre) * 10) / 10,
+      hrPre: Math.round(mean(winPre, 'hr')), hrPost: Math.round(mean(winPost, 'hr'))
+    });
+  });
+  return rows;
+}
+$('#dose-tool-button')?.addEventListener('click', () => {
+  const rows = computeDoseResponse();
+  const table = rows.map(r => `<tr><td>${r.drug}</td><td class="num">${r.dose < 1 ? `${(r.dose * 1000).toFixed(0)} µg/kg` : `${r.dose} mg/kg`}</td><td class="num">${r.pre}</td><td class="num">${r.post}</td><td class="num">${r.peak}</td><td class="num">${r.dAbp > 0 ? '+' : ''}${r.dAbp}</td><td class="num">${r.hrPre}→${r.hrPost}</td></tr>`).join('');
+  openDialog('量效曲线', `
+    <p>按给药事件自动计算:给药前 3 s 均值 → 给药后 3~20 s 均值/峰值(ΔABP = 后-前)。同一剂量多次给药逐行列出。</p>
+    <table class="work-table"><thead><tr><th>药物</th><th>剂量</th><th>给药前 ABP</th><th>给药后 ABP</th><th>峰值</th><th>ΔABP</th><th>HR 前→后</th></tr></thead><tbody>${rows.map(r => r).length ? table : '<tr><td colspan="7">本次实验尚无给药记录</td></tr>'}</tbody></table>
+    <div class="dose-plot-wrap"><canvas id="dose-canvas" width="720" height="260"></canvas></div>
+    <p class="micro-note">横轴为对数剂量,纵轴为 ΔABP;散点来自上表。剂量相同视为重复点。</p>
+    <button id="dose-csv-button" class="button secondary" type="button">导出量效数据 CSV</button>`);
+  // 散点图
+  const cv = document.querySelector<HTMLCanvasElement>('#dose-canvas');
+  if (cv && rows.length) {
+    const c2 = cv.getContext('2d')!;
+    c2.fillStyle = '#fff'; c2.fillRect(0, 0, 720, 260);
+    const usable = rows.filter(r => r.dose > 0);
+    const logMin = Math.log10(Math.min(...usable.map(r => r.dose))) - 0.2;
+    const logMax = Math.log10(Math.max(...usable.map(r => r.dose))) + 0.2;
+    const ys = rows.map(r => r.dAbp);
+    const yMin = Math.min(...ys, -5), yMax = Math.max(...ys, 5);
+    const X = (d: number) => 50 + (Math.log10(d) - logMin) / (logMax - logMin) * 650;
+    const Y = (v: number) => 230 - (v - yMin) / (yMax - yMin) * 200;
+    c2.strokeStyle = '#aab3bc'; c2.beginPath(); c2.moveTo(40, Y(0)); c2.lineTo(710, Y(0)); c2.stroke();
+    c2.fillStyle = '#606970'; c2.font = '10px Consolas'; c2.textAlign = 'center';
+    for (const r of usable) { const x = X(r.dose); c2.strokeStyle = '#e7eaee'; c2.beginPath(); c2.moveTo(x, 20); c2.lineTo(x, 235); c2.stroke(); c2.fillText(`${r.dose < 1 ? (r.dose * 1000).toFixed(0) + 'µg' : r.dose + 'mg'}`, x, 246); }
+    for (const r of rows) if (r.dose > 0) { c2.fillStyle = '#b03a2e'; c2.beginPath(); c2.arc(X(r.dose), Y(r.dAbp), 5, 0, Math.PI * 2); c2.fill(); }
+    c2.fillStyle = '#606970'; c2.textAlign = 'left'; c2.fillText('ΔABP mmHg', 8, 16);
+  }
+  document.querySelector<HTMLButtonElement>('#dose-csv-button')?.addEventListener('click', () => {
+    const csv = ['药物,剂量_mg/kg,给药前ABP,给药后ABP,峰值,ΔABP,HR前,HR后',
+      ...rows.map(r => `${r.drug},${r.dose},${r.pre},${r.post},${r.peak},${r.dAbp},${r.hrPre},${r.hrPost}`)].join('\r\n');
+    download(new Blob(['\uFEFF' + csv], { type: 'text/csv' }), filename('dose.csv'));
+  });
+});
+
+// ---- 测量工作表:光标取数 → 表格 → CSV ----
+let workRows: { t: number; abp: number; lvp: number; vbp: number; hf: number; hr: number }[] = [];
+function renderWorksheet(): void {
+  const table = workRows.map((r, i) => `<tr><td>${i + 1}</td><td class="num">${r.t.toFixed(2)}</td><td class="num">${r.abp.toFixed(1)}</td><td class="num">${r.lvp.toFixed(1)}</td><td class="num">${r.vbp.toFixed(1)}</td><td class="num">${r.hf.toFixed(1)}</td><td class="num">${r.hr.toFixed(0)}</td></tr>`).join('');
+  return void table; // 由打开对话框的函数拼装
+}
+$('#worksheet-button')?.addEventListener('click', () => {
+  openDialog('测量工作表', `
+    <p>点击曲线放置绿色光标,再点「加入光标读数」逐行记录;导出 CSV 交作业或作图。</p>
+    <table class="work-table"><thead><tr><th>#</th><th>时间 s</th><th>ABP</th><th>LVP</th><th>VBP</th><th>HF</th><th>HR</th></tr></thead><tbody id="work-body">${workRows.map((r, i) => `<tr><td>${i + 1}</td><td class="num">${r.t.toFixed(2)}</td><td class="num">${r.abp.toFixed(1)}</td><td class="num">${r.lvp.toFixed(1)}</td><td class="num">${r.vbp.toFixed(1)}</td><td class="num">${r.hf.toFixed(1)}</td><td class="num">${r.hr.toFixed(0)}</td></tr>`).join('') || '<tr><td colspan="7">暂无记录</td></tr>'}</tbody></table>
+    <div style="display:flex;gap:10px;margin-top:12px">
+      <button id="work-add" class="button secondary" type="button">加入光标读数</button>
+      <button id="work-clear" class="button ghost" type="button">清空</button>
+      <button id="work-csv" class="button primary" type="button">导出 CSV</button>
+    </div>`);
+  const refresh = () => {
+    document.querySelector<HTMLTableSectionElement>('#work-body')!.innerHTML = workRows.map((r, i) => `<tr><td>${i + 1}</td><td class="num">${r.t.toFixed(2)}</td><td class="num">${r.abp.toFixed(1)}</td><td class="num">${r.lvp.toFixed(1)}</td><td class="num">${r.vbp.toFixed(1)}</td><td class="num">${r.hf.toFixed(1)}</td><td class="num">${r.hr.toFixed(0)}</td></tr>`).join('');
+  };
+  document.querySelector<HTMLButtonElement>('#work-add')?.addEventListener('click', () => {
+    const t = cursorTime ?? frames.at(-1)?.t;
+    if (t === undefined) { toast('请先点击曲线放置测量光标'); return; }
+    const f = frameAtTime(t);
+    if (f) { workRows.push(f); refresh(); }
+  });
+  document.querySelector<HTMLButtonElement>('#work-clear')?.addEventListener('click', () => { workRows = []; refresh(); });
+  document.querySelector<HTMLButtonElement>('#work-csv')?.addEventListener('click', () => {
+    if (!workRows.length) { toast('工作表为空'); return; }
+    const csv = ['序号,时间_s,ABP_mmHg,LVP_mmHg,VBP_mmHg,HF,HR_bpm',
+      ...workRows.map((r, i) => `${i + 1},${r.t.toFixed(2)},${r.abp.toFixed(1)},${r.lvp.toFixed(1)},${r.vbp.toFixed(1)},${r.hf.toFixed(1)},${r.hr.toFixed(0)}`)].join('\r\n');
+    download(new Blob(['\uFEFF' + csv], { type: 'text/csv' }), filename('worksheet.csv'));
+  });
+});
 
 // ---------------- 自动保存与恢复 ----------------
 

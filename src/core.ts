@@ -64,6 +64,8 @@ export interface SessionState {
   recorderStarted: boolean;
   /** 导入历史 .rat 后只读回看 */
   historyOnly: boolean;
+  /** 死亡后全通道拉平(教学可选,偏离原版室颤行为) */
+  flattenAfterDeath: boolean;
   time: number;
   points: number;
   running: boolean;
@@ -143,7 +145,7 @@ export class Experiment {
 
   reset(pithed = this.state?.pithed ?? true, seed = this.state?.seed ?? 20261031, noise = this.state?.noise ?? true): void {
     this.state = {
-      pithed, recorderStarted: false, historyOnly: false,
+      pithed, recorderStarted: false, historyOnly: false, flattenAfterDeath: false,
       time: 0, points: 0, running: false, speed: DEFAULT_SPEED,
       noise, seed, rng: seed >>> 0, receptorNext: -1,
       dead: false, dying: 0, fibrillation: 0,
@@ -254,6 +256,11 @@ export class Experiment {
   setNoise(noise: boolean): void {
     this.state.noise = noise;
     this.addEvent('setting', noise ? '开启给药波动与记录噪声' : '关闭给药波动与记录噪声（当前药物效力不变）');
+  }
+
+  setFlattenAfterDeath(v: boolean): void {
+    this.state.flattenAfterDeath = v;
+    this.addEvent('setting', v ? '开启死亡后曲线拉平（偏离原版室颤行为）' : '关闭死亡后曲线拉平（恢复原版室颤行为）');
   }
 
   // ------------------------------------------------------------------
@@ -461,12 +468,14 @@ export class Experiment {
     }
 
     // 两个子样本（原版 GetLeadingPressure / GetTrailingPressure）
-    const hrNoise = s.noise ? this.addNoise(0.05) : 1;
+    // 死亡且开启"曲线拉平":心通道输出 0(教学可选,偏离原版室颤行为)
+    const flat = s.dead && s.flattenAfterDeath;
+    const hrNoise = s.noise && !flat ? this.addNoise(0.05) : 1;
     const t1 = s.points * SAMPLE_DT;
-    this.trace.push({ t: t1, abp: this.leading(art), lvp: this.leading(heart), vbp: this.leading(ven), hf: this.leadingCon(), hr: heart.rate * hrNoise });
+    this.trace.push({ t: t1, abp: this.leading(art), lvp: flat ? 0 : this.leading(heart), vbp: this.leading(ven), hf: flat ? 0 : this.leadingCon(), hr: flat ? 0 : heart.rate * hrNoise });
     s.points += 1;
     const t2 = s.points * SAMPLE_DT;
-    const frame = { t: t2, abp: this.trailing(art), lvp: this.trailing(heart), vbp: this.trailing(ven), hf: this.trailingCon(), hr: heart.rate };
+    const frame = { t: t2, abp: this.trailing(art), lvp: flat ? 0 : this.trailing(heart), vbp: this.trailing(ven), hf: flat ? 0 : this.trailingCon(), hr: flat ? 0 : heart.rate };
     this.trace.push(frame);
     s.points += 1;
     return frame;

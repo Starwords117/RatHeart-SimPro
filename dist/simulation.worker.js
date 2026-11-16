@@ -5,6 +5,7 @@ let sentFrames = 0, sentEvents = 0;
 let last = performance.now(), budget = 0;
 const BROADCAST_WINDOW = 18e3;
 let broadcastOn = false, broadcastSeq = 0, bSentFrames = 0, bSentEvents = 0, lastBroadcast = 0, broadcastFull = false;
+let broadcastRoom = "", broadcastToken = "";
 function broadcastNow() {
   const traceLen = experiment.trace.length;
   const windowStart = Math.max(0, traceLen - BROADCAST_WINDOW);
@@ -19,6 +20,8 @@ function broadcastNow() {
     bSentFrames = traceLen;
     bSentEvents = experiment.events.length;
   }
+  payload.room = broadcastRoom;
+  payload.token = broadcastToken;
   broadcastFull = false;
   scope.fetch("/api/broadcast", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) }).then((r) => r.json()).then((d) => scope.postMessage({ type: "broadcast", on: broadcastOn, followers: d.followers ?? 0 })).catch(() => {
     broadcastOn = false;
@@ -97,6 +100,10 @@ scope.onmessage = (event) => {
       experiment.setNoise(m.value);
       send();
       break;
+    case "flatten":
+      experiment.setFlattenAfterDeath(m.value);
+      send();
+      break;
     case "snapshot":
       scope.postMessage({ type: "snapshot", purpose: m.purpose ?? "download", snapshot: experiment.exportSnapshot() });
       break;
@@ -128,6 +135,8 @@ scope.onmessage = (event) => {
       }
       break;
     case "broadcast-on":
+      broadcastRoom = m.room ?? "";
+      broadcastToken = m.token ?? "";
       broadcastOn = true;
       broadcastSeq += 1;
       bSentFrames = 0;
@@ -136,18 +145,21 @@ scope.onmessage = (event) => {
       lastBroadcast = 0;
       broadcastNow();
       break;
-    // 关闭广播需回执,否则界面按钮状态不翻转
-    case "broadcast-off":
+    // 关闭广播需回执,否则界面按钮状态不翻转;同时通知服务器清空房间会话
+    case "broadcast-off": {
       broadcastOn = false;
+      scope.fetch("/api/broadcast-off", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ room: broadcastRoom, token: broadcastToken }) }).then((r) => r.json()).catch(() => {
+      });
       scope.postMessage({ type: "broadcast", on: false, followers: 0 });
       break;
+    }
   }
 };
 setInterval(() => {
   const now = performance.now();
   const elapsed = Math.min((now - last) / 1e3, 0.5);
   last = now;
-  if (broadcastOn && (broadcastFull || now - lastBroadcast >= 150 || experiment.trace.length > bSentFrames + 200)) {
+  if (broadcastOn && (broadcastFull || now - lastBroadcast >= 1e3 || experiment.trace.length > bSentFrames + 40)) {
     lastBroadcast = now;
     broadcastNow();
   }
