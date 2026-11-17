@@ -46,7 +46,26 @@ function toast(message: string): void {
   toastTimer = setTimeout(() => { el.style.opacity = '0'; }, 3200);
 }
 
+// Tauri 桌面环境检测(WKWebView/WebKitGTK 不支持 a[download],Blob 下载会静默失败)
+const IN_TAURI = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+
 function download(blob: Blob, name: string): void {
+  if (IN_TAURI) {
+    // Tauri 导出桥:转 base64 调 Rust 原生保存对话框(save_export 命令)
+    void blob.arrayBuffer().then(async buf => {
+      const bytes = new Uint8Array(buf);
+      let bin = '';
+      for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+      const invoke = (window as any).__TAURI_INTERNALS__?.invoke as ((cmd: string, args: unknown) => Promise<string>) | undefined;
+      if (!invoke) { toast('桌面导出桥不可用'); return; }
+      try {
+        await invoke('save_export', { name, b64: btoa(bin) });
+      } catch (err) {
+        if (String(err) !== '已取消') toast(`导出失败:${err}`);
+      }
+    });
+    return;
+  }
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url; link.download = name;
@@ -669,7 +688,7 @@ $('#concentration-button').addEventListener('click', () => {
 });
 
 // ---- 广播 ----
-// web(http/https)与桌面版(ratheart://,内嵌广播服务器)均支持;
+// web(http/https)与桌面版(Electron ratheart:// / Tauri,内嵌广播服务器)均支持;
 // 桌面版 API 直连 http://127.0.0.1:<端口>(主进程经 ?api= 传入),
 // 避免自定义协议代理在 worker POST 上的不确定性
 const DESKTOP_API_BASE = (() => {
@@ -677,7 +696,9 @@ const DESKTOP_API_BASE = (() => {
   return p ? `http://127.0.0.1:${p}` : '';
 })();
 const api = (p: string) => DESKTOP_API_BASE + p;
-const BROADCAST_CAPABLE = location.protocol.startsWith('http') || location.protocol === 'ratheart:';
+// Tauri:Linux/macOS 源为 tauri://,Windows 为 http://tauri.localhost(被 startsWith('http') 命中);
+// __TAURI_INTERNALS__ 判定对三平台一致
+const BROADCAST_CAPABLE = location.protocol.startsWith('http') || location.protocol === 'ratheart:' || IN_TAURI;
 const broadcastButton = $<HTMLButtonElement>('#broadcast-button');
 // 房间隔离:每位教师一个房间(学生跟随链接携带 ?room=);token 为教师令牌,
 // 推送/停止时携带,学生只读无法伪造广播

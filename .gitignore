@@ -5,3 +5,6 @@ release/
 # 本地杂项
 .DS_Store
 *.log
+
+# Rust 构建产物(Tauri 试点)
+target/

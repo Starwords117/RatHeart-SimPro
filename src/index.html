@@ -15,8 +15,11 @@
   <link rel="stylesheet" href="./styles.css">
   <script type="module" src="./app.js"></script>
   <script>
-    // PWA：浏览器（http/https）注册离线缓存；Electron（ratheart://）不需要
-    if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+    // PWA：浏览器（http/https）注册离线缓存；桌面版不需要
+    // （Electron ratheart://、Tauri —— Windows 下源是 http://tauri.localhost，
+    //   也会被 startsWith('http') 误命中，必须按 __TAURI_INTERNALS__ 排除，
+    //   否则 SW 会劫持 tauri 自定义协议的资产请求造成缓存错乱）
+    if ('serviceWorker' in navigator && location.protocol.startsWith('http') && !('__TAURI_INTERNALS__' in window)) {
       addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
     }
   </script>

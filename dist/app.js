@@ -35,7 +35,26 @@ function toast(message) {
     el.style.opacity = "0";
   }, 3200);
 }
+const IN_TAURI = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 function download(blob, name) {
+  if (IN_TAURI) {
+    void blob.arrayBuffer().then(async (buf) => {
+      const bytes = new Uint8Array(buf);
+      let bin = "";
+      for (let i = 0; i < bytes.length; i += 32768) bin += String.fromCharCode(...bytes.subarray(i, i + 32768));
+      const invoke = window.__TAURI_INTERNALS__?.invoke;
+      if (!invoke) {
+        toast("\u684C\u9762\u5BFC\u51FA\u6865\u4E0D\u53EF\u7528");
+        return;
+      }
+      try {
+        await invoke("save_export", { name, b64: btoa(bin) });
+      } catch (err) {
+        if (String(err) !== "\u5DF2\u53D6\u6D88") toast(`\u5BFC\u51FA\u5931\u8D25:${err}`);
+      }
+    });
+    return;
+  }
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -141,9 +160,9 @@ function drawChart() {
   context.setTransform(dpr, 0, 0, dpr, 0, 0);
   context.fillStyle = "#ffffff";
   context.fillRect(0, 0, width, height);
-  const window = windowPoints > 0 ? windowPoints : frames.length;
+  const window2 = windowPoints > 0 ? windowPoints : frames.length;
   const end = historyEnd ?? frames.length;
-  const start = Math.max(0, end - window);
+  const start = Math.max(0, end - window2);
   if (frames.length < 2 || end - start < 2) return;
   const left = 46, right = 12, top = 8, bottom = 30;
   const plotW = width - left - right, plotH = height - top - bottom;
@@ -650,7 +669,7 @@ const DESKTOP_API_BASE = (() => {
   return p ? `http://127.0.0.1:${p}` : "";
 })();
 const api = (p) => DESKTOP_API_BASE + p;
-const BROADCAST_CAPABLE = location.protocol.startsWith("http") || location.protocol === "ratheart:";
+const BROADCAST_CAPABLE = location.protocol.startsWith("http") || location.protocol === "ratheart:" || IN_TAURI;
 const broadcastButton = $("#broadcast-button");
 let broadcastRoom = localStorage.getItem("ratheart-room") ?? "";
 let broadcastToken = "";

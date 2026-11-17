@@ -6,10 +6,17 @@
 import { Worker } from 'node:worker_threads';
 import { createBroadcastServer } from '../server/broadcast-server.cjs';
 
+// --base <url>:不启动内置 CJS 服务器,改打外部服务器(Rust 版 ratheart-broadcast)
+// 用法:node tests/broadcast-e2e.mjs --base http://127.0.0.1:5213
+const baseArg = process.argv.indexOf('--base');
+const external = baseArg >= 0 ? process.argv[baseArg + 1] : null;
+
 const PORT = 5213;
-const BASE = `http://127.0.0.1:${PORT}`;
-const server = createBroadcastServer({ root: new URL('../dist/', import.meta.url).pathname, port: PORT, openLan: false });
-await new Promise(res => server.listen(PORT, '127.0.0.1', res));
+const BASE = external ?? `http://127.0.0.1:${PORT}`;
+const server = external
+  ? null
+  : createBroadcastServer({ root: new URL('../dist/', import.meta.url).pathname, port: PORT, openLan: false });
+if (server) await new Promise(res => server.listen(PORT, '127.0.0.1', res));
 
 const workerURL = new URL('../dist/simulation.worker.js', import.meta.url).href;
 // 桥接浏览器 Worker API:postMessage/onmessage;相对 fetch 以服务器为基底
@@ -97,5 +104,5 @@ const passed = results.filter(r => r.passed).length;
 console.log(JSON.stringify({ checks: results.length, passed, failed: results.length - passed }, null, 0));
 for (const r of results.filter(r => !r.passed)) console.error(`FAIL ${r.name}: ${JSON.stringify(r.actual)}`);
 worker.terminate().catch(() => {});
-server.close();
+server?.close();
 process.exitCode = passed === results.length ? 0 : 1;

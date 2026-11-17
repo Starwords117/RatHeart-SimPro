@@ -106,8 +106,16 @@ test('全按钮巡游:教师完整操作流程', async ({ page }) => {
 
   console.error('[T]', '窗口后', performance.now().toFixed(0));
   // 11. 导出:JSON / CSV / .rat / PNG 触发下载
+  // 导出按钮藏在 <details class="export-menu"> 折叠菜单里,必须先展开
+  // (否则按钮不可见,Playwright 点击会等待可见性直到超时)
+  const openExportMenu = async () => {
+    if (!await page.locator('.export-menu').evaluate(el => (el as HTMLDetailsElement).open)) {
+      await page.click('.export-menu summary');
+    }
+  };
+  await openExportMenu();
   for (const [btn, ext] of [['#save-button', '.json'], ['#csv-button', '.csv'], ['#png-button', '.png'], ['#rat-button', '.rat']] as const) {
-    const dl = page.waitForEvent('download');
+    const dl = page.waitForEvent('download', { timeout: 20000 });
     await page.click(btn);
     const download = await dl;
     expect(download.suggestedFilename().endsWith(ext), download.suggestedFilename()).toBe(true);
@@ -115,11 +123,19 @@ test('全按钮巡游:教师完整操作流程', async ({ page }) => {
 
   console.error('[T]', '导出后', performance.now().toFixed(0));
   // 12. 导入实验:JSON 导入恢复(仍暂停)
-  const dl2 = page.waitForEvent('download');
+  // 注意:setInputFiles 用裸路径时 File.name 是临时 UUID(无扩展名),
+  // 应用会正确地走 .rat 分支并拒绝——必须显式携带真实文件名
+  const dl2 = page.waitForEvent('download', { timeout: 20000 });
+  await openExportMenu();
   await page.click('#save-button');
   const download2 = await dl2;
   const path = await download2.path();
-  await page.setInputFiles('#file-input', path!);
+  const { readFileSync } = await import('node:fs');
+  await page.setInputFiles('#file-input', {
+    name: download2.suggestedFilename(),
+    mimeType: 'application/json',
+    buffer: readFileSync(path!)
+  });
   await expect(page.locator('#recording-status')).toContainText('已暂停', { timeout: 5000 });
 
   console.error('[T]', '导入后', performance.now().toFixed(0));
@@ -135,7 +151,8 @@ test('全按钮巡游:教师完整操作流程', async ({ page }) => {
   // 14. 地高辛 100 mg/kg → 快进 → 大鼠死亡
   await page.click('button[data-group="antagonist"]');
   const drugSel = page.locator('#drug-select');
-  await drugSel.selectOption({ label: '地高辛(Dig)' });
+  // 用 value 选择(label 是全角括号「地高辛（Dig）」,半角括号匹配不到会无限等待)
+  await drugSel.selectOption('digoxin');
   const doseSel = page.locator('#dose-select');
   const lastIdx = (await doseSel.locator('option').count()) - 1;
   await doseSel.selectOption({ index: lastIdx });
@@ -150,9 +167,10 @@ test('全按钮巡游:教师完整操作流程', async ({ page }) => {
   await expect(page.locator('#last-operation')).toContainText('Your rat has died');
 
   console.error('[T]', '死亡后', performance.now().toFixed(0));
-  // 15. 死亡后:模型锁定(点击不切换)
-  await page.check('input[name="rat-model"][value="normal"]');
+  // 15. 死亡后:模型锁定(点击不切换;不能用 page.check——它要求选中状态成立)
+  await page.click('input[name="rat-model"][value="normal"]');
   await expect(page.locator('#toast')).toContainText('动物模型已锁定', { timeout: 3000 });
+  await expect(page.locator('input[name="rat-model"][value="normal"]')).not.toBeChecked();
   await expect(page.locator('#chart-model')).toHaveText('去脑大鼠');
 
   // 16. 开始授课广播 → 停止(按钮翻转)

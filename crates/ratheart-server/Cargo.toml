@@ -1,0 +1,22 @@
+[package]
+name = "ratheart-server"
+version = "0.2.1"
+edition = "2021"
+description = "RatHeart-SimPro 授课广播/静态服务器(Rust 版,与 server/broadcast-server.cjs 语义对齐)"
+
+[dependencies]
+axum = "0.7"
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+percent-encoding = "2"
+if-addrs = "0.13"
+futures = "0.3"
+
+[lib]
+name = "ratheart_server"
+
+# 独立服务器二进制:不依赖 Tauri,可单测/可给 Node 环境之外的老师当 web CLI 用
+[[bin]]
+name = "ratheart-broadcast"
+path = "src/bin/ratheart-broadcast.rs"
