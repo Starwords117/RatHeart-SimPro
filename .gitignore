@@ -8,3 +8,4 @@ release/
 
 # Rust 构建产物(Tauri 试点)
 target/
+src-tauri/gen/
