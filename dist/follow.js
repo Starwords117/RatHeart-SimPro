@@ -85,6 +85,7 @@ function drawChart() {
   const end = Math.min(historyEnd ?? replayEnd(), frames.length);
   const start = windowSamples > 0 ? Math.max(0, end - windowSamples) : 0;
   if (end - start < 2) return;
+  globalThis.__chartRange = { start, end, frames: frames.length };
   const left = width < 480 ? 42 : 46, right = 12, top = 8, bottom = 30;
   const pw = width - left - right, ph = height - top - bottom;
   const bandGap = 18;

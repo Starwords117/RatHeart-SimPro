@@ -169,6 +169,7 @@ function drawChart() {
   const bandGap = 18;
   const bandH = (plotH - bandGap * (CHANNEL_KEYS.length - 1)) / CHANNEL_KEYS.length;
   currentRange = { start, end, left, right, top, bottom, width, height };
+  globalThis.__chartRange = { start, end, frames: frames.length };
   const visibleCount = end - start;
   const stride = Math.max(1, Math.floor(visibleCount / (plotW * 2)));
   const ovDur = () => (frames[Math.min(end, frames.length) - 1]?.t ?? 0) - (frames[start]?.t ?? 0);

@@ -100,9 +100,19 @@ test('全按钮巡游:教师完整操作流程', async ({ page }) => {
   await expect(sel).toHaveValue('960');
   await page.click('#window-half');
   await expect(sel).toHaveValue('480');
+  // 「全部记录」档必须真的绘制整条曲线:调试钩子核对绘制范围 == 全部帧
   await sel.selectOption('0');
   await expect(sel).toHaveValue('0');
+  await page.waitForFunction(() => {
+    const r = (window as any).__chartRange;
+    return !!r && r.start === 0 && r.end === r.frames && r.frames > 480;
+  }, undefined, { timeout: 3000 });
   await sel.selectOption('480');
+  // 回到 3 s 窗口:只显示最近 480 帧
+  await page.waitForFunction(() => {
+    const r = (window as any).__chartRange;
+    return !!r && r.start === r.end - 480 && r.end === r.frames;
+  }, undefined, { timeout: 3000 });
 
   console.error('[T]', '窗口后', performance.now().toFixed(0));
   // 11. 导出:JSON / CSV / .rat / PNG 触发下载

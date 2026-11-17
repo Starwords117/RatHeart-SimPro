@@ -89,6 +89,8 @@ function drawChart(): void {
   const end = Math.min(historyEnd ?? replayEnd(), frames.length);
   const start = windowSamples > 0 ? Math.max(0, end - windowSamples) : 0;
   if (end - start < 2) return;
+  // 只读调试钩子:测试据此断言「全部记录」档确实绘制了整条曲线(globalThis 防遮蔽)
+  (globalThis as any).__chartRange = { start, end, frames: frames.length };
 
   const left = width < 480 ? 42 : 46, right = 12, top = 8, bottom = 30;
   const pw = width - left - right, ph = height - top - bottom;
