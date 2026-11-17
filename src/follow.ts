@@ -238,6 +238,10 @@ function setPollInterval(ms: number): void {
   pollTimer = setInterval(poll, ms);
 }
 
+function stopPoll(): void {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = undefined; }
+}
+
 function sseHandle(m: any): void {
   lastDataAt = Date.now();
   if (m.type === 'off' || !m.state) {
@@ -304,7 +308,7 @@ document.addEventListener('visibilitychange', () => {
     setPollInterval(2000);
   } else if (!sseFailed) {
     connectSSE();
-    poll();
+    stopPoll();   // SSE 主链路恢复:停轮询,双链路并行会重复喂帧(曲线抖动)
   } else {
     setPollInterval(1000);
     poll();
@@ -317,6 +321,7 @@ if (!followRoom) {
   $('#plot-empty').classList.add('hidden');
   $('#plot-empty').innerHTML = '<strong>未指定跟随房间</strong><span>请从老师广播提示的链接进入,或让老师重新分享跟随地址。</span>';
 } else {
+  // SSE 为主链路:全量数据由 backfill 提供;初始 poll 不再启动——
+  // poll 成功会 setPollInterval 启动持续轮询,与 SSE 并行重复喂帧(v0.2.0 抖动根因)
   connectSSE();
-  poll();
 }

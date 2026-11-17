@@ -256,6 +256,12 @@ function setPollInterval(ms) {
   clearInterval(pollTimer);
   pollTimer = setInterval(poll, ms);
 }
+function stopPoll() {
+  if (pollTimer) {
+    clearInterval(pollTimer);
+    pollTimer = void 0;
+  }
+}
 function sseHandle(m) {
   lastDataAt = Date.now();
   if (m.type === "off" || !m.state) {
@@ -319,7 +325,7 @@ document.addEventListener("visibilitychange", () => {
     setPollInterval(2e3);
   } else if (!sseFailed) {
     connectSSE();
-    poll();
+    stopPoll();
   } else {
     setPollInterval(1e3);
     poll();
@@ -331,5 +337,4 @@ if (!followRoom) {
   $("#plot-empty").innerHTML = "<strong>\u672A\u6307\u5B9A\u8DDF\u968F\u623F\u95F4</strong><span>\u8BF7\u4ECE\u8001\u5E08\u5E7F\u64AD\u63D0\u793A\u7684\u94FE\u63A5\u8FDB\u5165,\u6216\u8BA9\u8001\u5E08\u91CD\u65B0\u5206\u4EAB\u8DDF\u968F\u5730\u5740\u3002</span>";
 } else {
   connectSSE();
-  poll();
 }

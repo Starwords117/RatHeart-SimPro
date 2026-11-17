@@ -439,6 +439,8 @@ worker.onmessage = (event) => {
   switch (m.type) {
     case "update":
       state = m.state;
+      globalThis.__simTime = state.time;
+      globalThis.__simSpeed = state.speed;
       activeDrugs = m.activeDrugs;
       if (m.replace) {
         frames = m.frames;

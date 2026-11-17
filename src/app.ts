@@ -463,6 +463,8 @@ worker.onmessage = (event: MessageEvent) => {
   switch (m.type) {
     case 'update':
       state = m.state;
+      (globalThis as any).__simTime = state.time;      // 调试标定用
+      (globalThis as any).__simSpeed = state.speed;
       activeDrugs = m.activeDrugs;
       if (m.replace) { frames = m.frames; events = m.events; historyEnd = null; cursorTime = null; }
       else { frames.push(...m.frames); events.push(...m.events); }
