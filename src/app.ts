@@ -480,6 +480,17 @@ worker.onmessage = (event: MessageEvent) => {
       }
       break;
     }
+    case 'broadcast-ipc': {
+      // 桌面版:worker 把广播推送转交主线程,经 Tauri IPC 过进程内路由
+      // (WebView 对 127.0.0.1 的 fetch 会被 PNA/LNA 私网限制拦截)
+      const inv = (globalThis as any).__TAURI_INTERNALS__?.invoke as
+        ((cmd: string, args: unknown) => Promise<[number, string]>) | undefined;
+      if (!inv) break;
+      inv('api_call', { method: 'POST', path: m.path, body: m.body })
+        .then(res => worker.postMessage({ type: 'broadcast-ipc-result', status: res[0], body: res[1] }))
+        .catch(e => worker.postMessage({ type: 'broadcast-ipc-result', status: 0, body: String(e) }));
+      break;
+    }
     case 'snapshot': {
       const snapshot = m.snapshot as Snapshot;
       if (m.purpose === 'autosave') {
@@ -691,14 +702,27 @@ $('#concentration-button').addEventListener('click', () => {
 });
 
 // ---- 广播 ----
-// web(http/https)与桌面版(Electron ratheart:// / Tauri,内嵌广播服务器)均支持;
-// 桌面版 API 直连 http://127.0.0.1:<端口>(主进程经 ?api= 传入),
-// 避免自定义协议代理在 worker POST 上的不确定性
+// web(http/https)与桌面版(Tauri 内嵌广播服务器)均支持;
+// 桌面版 API 直连 http://127.0.0.1:<端口>,避免自定义协议代理在 worker POST 上的不确定性。
+// 端口来源:?api= URL 参数(web 调试用)或 Tauri 初始化脚本注入的 __RATHEART_API_PORT__
+// (WebviewUrl::App 路径会丢弃 query,故桌面版走注入)
 const DESKTOP_API_BASE = (() => {
-  const p = new URLSearchParams(location.search).get('api');
+  const p = new URLSearchParams(location.search).get('api') ?? '';
   return p ? `http://127.0.0.1:${p}` : '';
 })();
 const api = (p: string) => DESKTOP_API_BASE + p;
+// 广播 API 调用:网页版走同源 fetch;桌面版(worker 同理)走 Tauri IPC 进程内
+// 通道——WebView 对 127.0.0.1 回环的 fetch 被 PNA/LNA 私网限制拦截
+const callApi = async (path: string): Promise<any> => {
+  if (IN_TAURI) {
+    const inv = (globalThis as any).__TAURI_INTERNALS__?.invoke as
+      ((cmd: string, args: unknown) => Promise<[number, string]>) | undefined;
+    if (!inv) throw new Error('IPC 不可用');
+    const res = await inv('api_call', { method: 'GET', path });
+    return JSON.parse(res[1]);
+  }
+  return (await fetch(path, { cache: 'no-store' })).json();
+};
 // Tauri:Linux/macOS 源为 tauri://,Windows 为 http://tauri.localhost(被 startsWith('http') 命中);
 // __TAURI_INTERNALS__ 判定对三平台一致
 const BROADCAST_CAPABLE = location.protocol.startsWith('http') || location.protocol === 'ratheart:' || IN_TAURI;
@@ -718,23 +742,22 @@ if (BROADCAST_CAPABLE) {
   broadcastButton.classList.remove('hidden');
   broadcastButton.textContent = '开始授课广播';
   broadcastButton.addEventListener('click', () => {
-    if (broadcasting) {
-      // worker 会携带 room+token+base 通知服务器清空房间会话
-      send('broadcast-off', { base: DESKTOP_API_BASE });
-    } else {
-      if (!broadcastRoom) {
-        broadcastRoom = genRoom();
-        localStorage.setItem('ratheart-room', broadcastRoom);
+      if (broadcasting) {
+        // worker 会携带 room+token 通知服务器清空房间会话
+        send('broadcast-off', { base: DESKTOP_API_BASE, mode: IN_TAURI ? 'ipc' : 'http' });
+      } else {
+        if (!broadcastRoom) {
+          broadcastRoom = genRoom();
+          localStorage.setItem('ratheart-room', broadcastRoom);
+        }
+        broadcastToken = genToken();
+        send('broadcast-on', { room: broadcastRoom, token: broadcastToken, base: DESKTOP_API_BASE, mode: IN_TAURI ? 'ipc' : 'http' });
       }
-      broadcastToken = genToken();
-      send('broadcast-on', { room: broadcastRoom, token: broadcastToken, base: DESKTOP_API_BASE });
-    }
   });
   // 获取教学机局域网地址,开启广播后提示同学访问地址
-  fetch(api('/api/lan'), { cache: 'no-store' })
-    .then(r => r.json())
+  callApi('/api/lan')
     .then(d => { lanInfo = d; updateBroadcastButton(0); })
-    .catch(() => { /* Electron/file 模式无此接口 */ });
+    .catch(() => { /* 无此接口时静默(提示条为空) */ });
 }
 
 // ---- 主页直播横幅:检测到授课广播进行时,引导开错页面的同学进入跟随页 ----
@@ -742,8 +765,7 @@ let lastSessionLive = false;
 let liveBannerDismissed = false;
 function pollLiveSession(): void {
   if (!BROADCAST_CAPABLE) return;
-  fetch(api('/api/session'), { cache: 'no-store' })
-    .then(r => r.json())
+  callApi('/api/session')
     .then(data => {
       if (lastSessionLive === false && data.live) liveBannerDismissed = false;
       lastSessionLive = !!data.live;

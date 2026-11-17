@@ -6,8 +6,9 @@
 // 会话保存在进程内存,不落盘、不外发。
 // ============================================================
 use axum::{
+    body::Body,
     extract::{DefaultBodyLimit, Query, State},
-    http::{header, HeaderValue, Method, StatusCode, Uri},
+    http::{header, HeaderValue, Method, Request, StatusCode, Uri},
     response::sse::{Event, Sse},
     response::{IntoResponse, Response},
     routing::{get, post},
@@ -28,6 +29,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 use tokio::sync::broadcast;
+use tower::ServiceExt;
 
 const MAX_BROADCAST_FRAMES: usize = 18_000; // 滚动窗口 15 分钟 @40 子样本/s(CJS 40)
 const SESSION_GC_MS: u64 = 60_000; // 无跟随者且 60s 无更新 → 会话清除(CJS 41)
@@ -80,7 +82,7 @@ impl Room {
 }
 
 #[derive(Clone)]
-struct AppState {
+pub struct AppState {
     rooms: Arc<Mutex<HashMap<String, Room>>>,
     /// 房间停止广播后的迟到推送忽略窗口(roomId → 忽略截止时刻 ms, CJS 47)
     recently_closed: Arc<Mutex<HashMap<String, u64>>>,
@@ -161,12 +163,22 @@ fn text_res(status: StatusCode, body: &'static str) -> Response {
 // 路由(CJS 147-255)
 // ============================================================
 pub fn router(config: ServerConfig) -> Router {
-    let state = AppState {
+    let state = build_state(config);
+    spawn_gc(state.clone());
+    routes(state)
+}
+
+/// 构建共享状态(Tauri 进程内调用通道与 TCP 服务器共用同一份房间数据)
+pub fn build_state(config: ServerConfig) -> AppState {
+    AppState {
         rooms: Arc::new(Mutex::new(HashMap::new())),
         recently_closed: Arc::new(Mutex::new(HashMap::new())),
         config: Arc::new(config),
-    };
-    spawn_gc(state.clone());
+    }
+}
+
+/// 用既有状态构建路由(Tauri api_call 经 oneshot 复用同一套路由)
+pub fn routes(state: AppState) -> Router {
     Router::new()
         .route("/api/broadcast", post(broadcast))
         .route("/api/broadcast-off", post(broadcast_off))
@@ -186,20 +198,32 @@ async fn cors(req: axum::extract::Request, next: axum::middleware::Next) -> Resp
     let is_options = req.method() == Method::OPTIONS;
     let mut res = next.run(req).await;
     if is_api {
-        res.headers_mut().insert(
+        // Access-Control-Allow-Private-Network:新版 Chromium(WebView2)与 WebKit
+        // 对「私网源 → 本机回环」启用 PNA/LNA 拦截,预检/响应缺此头会被直接以
+        // Load failed / Failed to fetch 拒绝——桌面版广播首次失败的原因
+        let h = res.headers_mut();
+        h.insert(
             header::ACCESS_CONTROL_ALLOW_ORIGIN,
             HeaderValue::from_static("*"),
         );
+        h.insert(
+            header::HeaderName::from_static("access-control-allow-private-network"),
+            HeaderValue::from_static("true"),
+        );
         if is_options {
             let mut pre = StatusCode::NO_CONTENT.into_response();
-            let h = pre.headers_mut();
-            h.insert(
+            let ph = pre.headers_mut();
+            ph.insert(
                 header::ACCESS_CONTROL_ALLOW_METHODS,
                 HeaderValue::from_static("GET,POST,OPTIONS"),
             );
-            h.insert(
+            ph.insert(
                 header::ACCESS_CONTROL_ALLOW_HEADERS,
                 HeaderValue::from_static("content-type"),
+            );
+            ph.insert(
+                header::HeaderName::from_static("access-control-allow-private-network"),
+                HeaderValue::from_static("true"),
             );
             return pre;
         }
@@ -664,7 +688,49 @@ pub async fn serve(config: ServerConfig) -> Result<(), Box<dyn Error>> {
     let port = config.port;
     let host = config.host.clone();
     let app = router(config);
+    serve_on(host, port, app).await
+}
+
+/// 用既有路由启动 TCP 服务(Tauri 进程内调用与 TCP 共享同一份状态)
+pub async fn serve_on(host: String, port: u16, app: Router) -> Result<(), Box<dyn Error>> {
     let listener = tokio::net::TcpListener::bind((host.as_str(), port)).await?;
     axum::serve(listener, app).await?;
     Ok(())
+}
+
+/// 进程内调用:不经网络栈直接过 axum 路由。
+/// 桌面版页面/worker 对本机回环的 fetch 会被 WebView 的
+/// 私网访问限制(PNA/LNA)在进 TCP 之前拦掉,故桌面壳走此通道。
+pub async fn call_api(
+    state: &AppState,
+    method: &str,
+    path: &str,
+    body: Option<&str>,
+) -> (u16, String) {
+    let router = routes(state.clone());
+    let uri: Uri = match path.parse() {
+        Ok(u) => u,
+        Err(_) => return (400, "Bad path".into()),
+    };
+    let mut builder = Request::builder()
+        .method(method)
+        .uri(uri)
+        .header(header::ORIGIN, "tauri://localhost");
+    if body.is_some() {
+        builder = builder.header(header::CONTENT_TYPE, "application/json");
+    }
+    let req = match builder.body(Body::from(body.unwrap_or_default().to_string())) {
+        Ok(r) => r,
+        Err(_) => return (400, "Bad request".into()),
+    };
+    match router.oneshot(req).await {
+        Ok(res) => {
+            let status = res.status().as_u16();
+            match axum::body::to_bytes(res.into_body(), BODY_LIMIT).await {
+                Ok(bytes) => (status, String::from_utf8_lossy(&bytes).into_owned()),
+                Err(e) => (500, format!("body read: {e}")),
+            }
+        }
+        Err(e) => (500, format!("router: {e}")),
+    }
 }

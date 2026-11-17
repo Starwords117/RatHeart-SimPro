@@ -6,6 +6,7 @@ let last = performance.now(), budget = 0;
 const BROADCAST_WINDOW = 18e3;
 let broadcastOn = false, broadcastSeq = 0, bSentFrames = 0, bSentEvents = 0, lastBroadcast = 0, broadcastFull = false;
 let broadcastRoom = "", broadcastToken = "", broadcastBase = "";
+let ipcMode = false;
 function broadcastNow() {
   const traceLen = experiment.trace.length;
   const windowStart = Math.max(0, traceLen - BROADCAST_WINDOW);
@@ -23,6 +24,10 @@ function broadcastNow() {
   payload.room = broadcastRoom;
   payload.token = broadcastToken;
   broadcastFull = false;
+  if (ipcMode) {
+    scope.postMessage({ type: "broadcast-ipc", path: "/api/broadcast", body: JSON.stringify(payload) });
+    return;
+  }
   const ctrl = new AbortController();
   const kill = setTimeout(() => ctrl.abort(), 5e3);
   scope.fetch(`${broadcastBase}/api/broadcast`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload), signal: ctrl.signal }).then((r) => r.json()).then((d) => {
@@ -144,6 +149,7 @@ scope.onmessage = (event) => {
       broadcastRoom = m.room ?? "";
       broadcastToken = m.token ?? "";
       broadcastBase = m.base ?? "";
+      ipcMode = m.mode === "ipc";
       broadcastOn = true;
       broadcastSeq += 1;
       bSentFrames = 0;
@@ -152,11 +158,31 @@ scope.onmessage = (event) => {
       lastBroadcast = 0;
       broadcastNow();
       break;
+    // 桌面版 ipc 推送的结果回执(主线程 invoke 后转发)
+    case "broadcast-ipc-result": {
+      let followers = 0, detail = "";
+      try {
+        const j = JSON.parse(m.body);
+        followers = j.followers ?? 0;
+        if (m.status === 403) detail = "403 Forbidden";
+      } catch {
+        detail = "\u54CD\u5E94\u89E3\u6790\u5931\u8D25";
+      }
+      if (m.status && m.status >= 400) {
+        broadcastOn = false;
+        scope.postMessage({ type: "broadcast", on: false, error: true, detail: detail || "HTTP " + m.status });
+      } else scope.postMessage({ type: "broadcast", on: broadcastOn, followers });
+      break;
+    }
     // 关闭广播需回执,否则界面按钮状态不翻转;同时通知服务器清空房间会话
     case "broadcast-off": {
       broadcastOn = false;
-      scope.fetch(`${broadcastBase}/api/broadcast-off`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ room: broadcastRoom, token: broadcastToken }) }).catch(() => {
-      });
+      if (ipcMode) {
+        scope.postMessage({ type: "broadcast-ipc", path: "/api/broadcast-off", body: JSON.stringify({ room: broadcastRoom, token: broadcastToken }) });
+      } else {
+        scope.fetch(`${broadcastBase}/api/broadcast-off`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ room: broadcastRoom, token: broadcastToken }) }).catch(() => {
+        });
+      }
       scope.postMessage({ type: "broadcast", on: false, followers: 0 });
       break;
     }

@@ -18,6 +18,9 @@ let last = performance.now(), budget = 0;
 const BROADCAST_WINDOW = 18000;
 let broadcastOn = false, broadcastSeq = 0, bSentFrames = 0, bSentEvents = 0, lastBroadcast = 0, broadcastFull = false;
 let broadcastRoom = '', broadcastToken = '', broadcastBase = '';
+// ipc 模式(桌面版):推送经主线程 invoke 过进程内路由,绕开 WebView 私网限制;
+// http 模式(网页版):直接 fetch 同源 /api/broadcast
+let ipcMode = false;
 function broadcastNow(): void {
   const traceLen = experiment.trace.length;
   const windowStart = Math.max(0, traceLen - BROADCAST_WINDOW);
@@ -33,6 +36,11 @@ function broadcastNow(): void {
   payload.room = broadcastRoom;
   payload.token = broadcastToken;
   broadcastFull = false;
+  if (ipcMode) {
+    // 结果由主线程回传 broadcast-ipc-result 后再更新按钮状态
+    scope.postMessage({ type: 'broadcast-ipc', path: '/api/broadcast', body: JSON.stringify(payload) });
+    return;
+  }
   // POST 显式超时:失败/挂起都以 detail 回执,界面可见
   const ctrl = new AbortController();
   const kill = setTimeout(() => ctrl.abort(), 5000);
@@ -92,12 +100,25 @@ scope.onmessage = (event: MessageEvent) => {
       break;
     case 'broadcast-on':
       broadcastRoom = m.room ?? ''; broadcastToken = m.token ?? ''; broadcastBase = m.base ?? '';
+      ipcMode = m.mode === 'ipc';
       broadcastOn = true; broadcastSeq += 1; bSentFrames = 0; bSentEvents = 0; broadcastFull = true; lastBroadcast = 0; broadcastNow(); break;
+    // 桌面版 ipc 推送的结果回执(主线程 invoke 后转发)
+    case 'broadcast-ipc-result': {
+      let followers = 0, detail = '';
+      try { const j = JSON.parse(m.body); followers = j.followers ?? 0; if (m.status === 403) detail = '403 Forbidden'; } catch { detail = '响应解析失败'; }
+      if (m.status && m.status >= 400) { broadcastOn = false; scope.postMessage({ type: 'broadcast', on: false, error: true, detail: detail || ('HTTP ' + m.status) }); }
+      else scope.postMessage({ type: 'broadcast', on: broadcastOn, followers });
+      break;
+    }
     // 关闭广播需回执,否则界面按钮状态不翻转;同时通知服务器清空房间会话
     case 'broadcast-off': {
       broadcastOn = false;
-      scope.fetch(`${broadcastBase}/api/broadcast-off`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ room: broadcastRoom, token: broadcastToken }) })
-        .catch(() => { /* 服务器不可达时 GC 会兜底 */ });
+      if (ipcMode) {
+        scope.postMessage({ type: 'broadcast-ipc', path: '/api/broadcast-off', body: JSON.stringify({ room: broadcastRoom, token: broadcastToken }) });
+      } else {
+        scope.fetch(`${broadcastBase}/api/broadcast-off`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ room: broadcastRoom, token: broadcastToken }) })
+          .catch(() => { /* 服务器不可达时 GC 会兜底 */ });
+      }
       scope.postMessage({ type: 'broadcast', on: false, followers: 0 });
       break;
     }

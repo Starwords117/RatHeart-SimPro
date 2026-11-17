@@ -12,8 +12,12 @@
 //   (WKWebView/WebKitGTK 无 a[download],Blob 下载会静默失败)
 // ============================================================
 use base64::Engine;
+use std::sync::OnceLock;
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_dialog::DialogExt;
+
+/// 广播服务器共享状态:api_call 进程内通道与 TCP 服务器共用
+static API_STATE: OnceLock<ratheart_server::AppState> = OnceLock::new();
 
 /// 与 Electron 版 findFreePort 同规则:从 5189 起探测空闲端口,上限 +20
 fn find_free_port(start: u16) -> u16 {
@@ -65,10 +69,23 @@ async fn save_export(app: tauri::AppHandle, name: String, b64: String) -> Result
     .map_err(|e| e.to_string())?
 }
 
+/// 广播 API 进程内通道:页面/worker 对 127.0.0.1 的 fetch 会被 WebView 的
+/// 私网访问限制(PNA/LNA)拦下,故桌面版经 IPC 直接过 axum 路由(无网络栈)。
+/// 返回 [HTTP 状态码, 响应体]。
+#[tauri::command]
+async fn api_call(
+    method: String,
+    path: String,
+    body: Option<String>,
+) -> Result<(u16, String), String> {
+    let state = API_STATE.get().ok_or_else(|| "广播服务器未就绪".to_string())?;
+    Ok(ratheart_server::call_api(state, &method, &path, body.as_deref()).await)
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![save_export])
+        .invoke_handler(tauri::generate_handler![save_export, api_call])
         .setup(|app| {
             let port = find_free_port(5189);
             let handle = app.handle().clone();
@@ -78,8 +95,12 @@ fn main() {
                 host: "0.0.0.0".to_string(),
                 open_lan: true,
             };
+            // 状态先入 OnceLock(页面 IPC 通道立即可用),再起学生用的 TCP 服务器
+            let state = ratheart_server::build_state(config);
+            let router = ratheart_server::routes(state.clone());
+            let _ = API_STATE.set(state);
             tauri::async_runtime::spawn(async move {
-                if let Err(e) = ratheart_server::serve(config).await {
+                if let Err(e) = ratheart_server::serve_on("0.0.0.0".to_string(), port, router).await {
                     eprintln!("局域网广播启动失败:{e}");
                     handle
                         .dialog()
@@ -88,8 +109,10 @@ fn main() {
                         .blocking_show();
                 }
             });
-            // 端口经 ?api= 传给页面(与 Electron 版同机制)
-            let url = WebviewUrl::App(std::path::PathBuf::from(format!("index.html?api={port}")));
+            // 端口经初始化脚本注入页面(在页面任何脚本执行前生效)。
+            // 不能用 URL query:WebviewUrl::App 的路径会丢弃 ?参数,
+            // 页面拿不到端口就会把广播 POST 打到 tauri 协议上(表现为「广播启动失败:Load failed」)
+            let url = WebviewUrl::App(std::path::PathBuf::from("index.html"));
             WebviewWindowBuilder::new(app, "main", url)
                 .title("大鼠心血管实验台")
                 .inner_size(1360.0, 900.0)
