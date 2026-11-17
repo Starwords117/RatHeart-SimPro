@@ -1,4 +1,4 @@
-# RatHeart-SimPro · 大鼠心血管实验台（v0.2.1）
+# RatHeart-SimPro · 大鼠心血管实验台（v0.2.0）
 
 用 TypeScript 重构 RatCVS 3.3.7 的大鼠心血管系统仿真，并建立中文 Web 操作界面。
 计算在 Web Worker 中推进，界面绘制 ABP / LVP / VBP / HF / HR 五通道图纸记录仪曲线。
@@ -25,16 +25,16 @@
    开启广播后，界面会自动显示教学机的局域网地址与房间号(学生误开主页时
    顶部会出现「进入跟随页」引导横幅);跟随传输为 SSE 长连接,断线自动回退轮询。
 
-### Local · 学生本地安装
+### Local · 学生本地安装（Tauri 桌面版）
 
-三平台安装包已在 Linux 构建机打包完成（产物在 `release/`，流程见
-[docs/三平台打包说明.md](docs/三平台打包说明.md)）：
+三平台安装包由 GitHub Actions 在对应平台构建（push tag `v*` 自动出包，见
+`.github/workflows/release.yml`），从 GitHub Releases 下载：
 
 | 平台 | 安装包 | 产物 |
 | --- | --- | --- |
-| Windows | portable 免安装 / NSIS 中文安装版 | `RatHeart-SimPro-*-Portable.exe` / `RatHeart-SimPro-*-Setup.exe` |
-| Linux | AppImage / deb | `RatHeart-SimPro-*-AppImage` / `ratheart-simpro_*_amd64.deb` |
-| macOS | zip（Intel + Apple Silicon，解压即用；dmg 需在 macOS 上构建） | `RatHeart-SimPro-*-mac.zip` |
+| Windows | NSIS 中文安装版（WebView2 缺失时自动安装） | `RatHeart-SimPro_*_x64-setup.exe` |
+| Linux | deb / rpm（系统 webkit2gtk-4.1，约 4 MB）/ AppImage（全捆绑，约 110 MB） | `ratheart-simpro_*_amd64.deb` 等 |
+| macOS | universal dmg（Intel + Apple Silicon 一体，需 macOS 12+） | `RatHeart-SimPro_*_universal.dmg` |
 
 安装后双击即用（无需 Node.js）;桌面版内置局域网广播服务,可直接授课（Windows 首次运行允许防火墙访问）。实验文件：`保存完整实验`（JSON，含全部状态与
 波形）、`导出波形数据`（CSV）、`导出当前曲线`（PNG）、`导出原版记录文件`
@@ -80,7 +80,8 @@ npm test           # 49 项内核核验 + 8 项 Worker 消息链核验
 | `tests/worker-check.mjs` | Worker 消息链核验（Node worker_threads 桥接） |
 | `tests/fixtures/*.rat` | 原版软件生成的真实记录（校准基准） |
 | `scripts/build.mjs` / `serve.mjs` | 零依赖构建与静态服务器 + 广播 API |
-| `desktop/main.cjs` | Electron 入口（`ratcvs://` 协议） |
+| `src-tauri/` | Tauri 桌面壳（内嵌广播服务器、原生导出对话框） |
+| `crates/ratheart-server/` | 广播服务器 Rust 实现（与 `server/broadcast-server.cjs` 等价，可独立运行） |
 | `docs/RatCVS源码逆向-功能与模型规格.md` | 原版逆向规格（重写依据） |
 
 网页没有前端运行时依赖，也不需要 API Key。

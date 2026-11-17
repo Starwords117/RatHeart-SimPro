@@ -1,6 +1,6 @@
 [package]
 name = "ratheart-simpro"
-version = "0.2.1"
+version = "0.2.0"
 edition = "2021"
 description = "RatHeart-SimPro 大鼠心血管药理实验模拟桌面版(Tauri 试点)"
 

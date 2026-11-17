@@ -1,50 +1,67 @@
+# 三平台桌面版发布(Tauri):push tag v* 触发。
+# 产物上传到 Draft Release,真机验收后在 GitHub 页面转正式。
 name: Release
-
 on:
   push:
     tags: ['v*']
-
 permissions:
   contents: write
-
 jobs:
-  release:
-    runs-on: ubuntu-latest
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-22.04        # 22.04 出 deb,兼容更老 glibc
+            args: --bundles deb,appimage,rpm
+          - platform: windows-latest      # NSIS 中文向导(WebView2 缺失时自动装)
+            args: --bundles nsis
+          - platform: macos-latest        # universal 二进制(x86_64 + aarch64 一体)
+            args: --target universal-apple-darwin
+    runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - run: npm ci
-      - run: npm run check
-      - run: npm run build
-      - run: npm test
-      # 三平台安装包(zip 目标全平台可构建;Linux 构建机亦可产出 deb/AppImage)
-      - run: npx electron-builder --win --x64 --publish never
-      - run: npx electron-builder --linux --x64 --publish never
-      - run: npx electron-builder --mac zip --x64 --arm64 --publish never
-      - name: 生成 SHA256SUMS
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      - uses: Swatinem/rust-cache@v2
+      - name: 安装 Linux 打包依赖
+        if: matrix.platform == 'ubuntu-22.04'
         run: |
-          cd release
-          sha256sum RatHeart-SimPro-*-x64-Setup.exe RatHeart-SimPro-*-x64-Portable.exe \
-            RatHeart-SimPro-*-x86_64-AppImage ratheart-simpro_*_amd64.deb \
-            RatHeart-SimPro-*-mac.zip RatHeart-SimPro-*-arm64-mac.zip > SHA256SUMS.txt
-      - name: 上传到 GitHub Release
-        uses: softprops/action-gh-release@v2
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf libssl-dev
+      - name: 前端核验与构建
+        run: |
+          npm ci
+          npm run check
+          npm run build
+      - name: Node 侧核验(仅 Linux,避开 Windows 路径差异)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: npm test
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          files: |
-            release/RatHeart-SimPro-*.exe
-            release/RatHeart-SimPro-*.AppImage
-            release/ratheart-simpro-*.deb
-            release/ratheart-simpro_*.deb
-            release/RatHeart-SimPro-*.zip
-            release/SHA256SUMS.txt
-          generate_release_notes: true
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: installers
-          path: |
-            release/RatHeart-SimPro-*
-            release/SHA256SUMS.txt
-          retention-days: 7
+          tagName: ${{ github.ref_name }}
+          releaseName: 'RatHeart-SimPro ${{ github.ref_name }}'
+          releaseBody: '大鼠心血管药理实验模拟桌面版(Tauri)。完整发布说明见 docs/RELEASE_NOTES_v0.2.0.md。'
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
+
+  checksums:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 生成 SHA256SUMS 并上传到 Draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download "${{ github.ref_name }}" --dir assets --clobber
+          cd assets && sha256sum * > ../SHA256SUMS.txt && cd ..
+          gh release upload "${{ github.ref_name }}" SHA256SUMS.txt --clobber

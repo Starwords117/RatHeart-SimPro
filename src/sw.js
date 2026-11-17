@@ -1,6 +1,6 @@
 /* 大鼠心血管实验台 Service Worker：预缓存应用外壳，断网可继续使用已加载的实验。
  * 实验数据保存在 localStorage，不经过网络；缓存策略为 stale-while-revalidate。 */
-const CACHE = 'ratheart-simpro-v0.2.1';
+const CACHE = 'ratheart-simpro-v0.2.0';
 const SHELL = [
   './',
   './index.html',

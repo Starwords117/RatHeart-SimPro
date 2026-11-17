@@ -1,6 +1,6 @@
 [package]
 name = "ratheart-server"
-version = "0.2.1"
+version = "0.2.0"
 edition = "2021"
 description = "RatHeart-SimPro 授课广播/静态服务器(Rust 版,与 server/broadcast-server.cjs 语义对齐)"
 
