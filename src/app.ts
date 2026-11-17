@@ -5,7 +5,7 @@
 
 import { DRUGS, NERVE_PATHWAYS, drugById, doseList } from './catalog.js';
 import type { DrugDefinition } from './catalog.js';
-import { MODEL_VERSION, DEFAULT_WINDOW_POINTS, CH_SCALE, SAMPLE_DT } from './core.js';
+import { MODEL_VERSION, DEFAULT_WINDOW_POINTS, MIN_WINDOW_POINTS, MAX_WINDOW_POINTS, CH_SCALE, SAMPLE_DT } from './core.js';
 import type { Frame, ExperimentEvent, SessionState, Snapshot } from './core.js';
 
 const $ = <T extends HTMLElement = HTMLElement>(selector: string) => document.querySelector<T>(selector)!;
@@ -32,7 +32,7 @@ const CHANNEL_LABELS: Record<string, string> = { abp: 'ABP 动脉血压 mmHg', l
 const CHANNEL_KEYS = ['abp', 'lvp', 'vbp', 'hf', 'hr'] as const;
 const CHANNEL_DEFAULT_MAX: Record<string, number> = { abp: 220, lvp: 220, vbp: 20, hf: 20, hr: 400 };
 const EVENT_COLORS: Record<string, string> = { dose: '#78818a', stimulus: '#8b7552', death: '#b03a2e', import: '#9aa4ad' };
-let currentRange = { start: 0, end: 4000, left: 46, right: 12, top: 8, bottom: 30, width: 800, height: 420 };
+let currentRange = { start: 0, end: DEFAULT_WINDOW_POINTS, left: 46, right: 12, top: 8, bottom: 30, width: 800, height: 420 };
 
 // ---------------- 基础工具 ----------------
 
@@ -634,8 +634,8 @@ $('#advance-button').addEventListener('click', () => send('advance', { seconds: 
 $<HTMLSelectElement>('#speed-select').addEventListener('change', (event) => send('speed', { value: Number((event.target as HTMLSelectElement).value) }));
 
 function setWindow(points: number): void {
-  // 0 = 全部记录（哨兵值），其余为子样本数
-  windowPoints = points === 0 ? 0 : Math.max(500, points);
+  // 0 = 全部记录（哨兵值），其余为子样本数；钳在 1.5 s ~ 96 s
+  windowPoints = points === 0 ? 0 : Math.min(MAX_WINDOW_POINTS, Math.max(MIN_WINDOW_POINTS, points));
   const select = $<HTMLSelectElement>('#window-select');
   if (windowPoints > 0) {
     const match = Array.from(select.options).find(o => Number(o.value) === windowPoints);

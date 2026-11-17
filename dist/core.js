@@ -5,7 +5,9 @@ const POINT_DT = DT * STEPS_PER_POINT;
 const RECEPTOR_DT = 5e-3;
 const MODEL_VERSION = "ratheart-simpro-0.2.0";
 const DEFAULT_SPEED = 0.25;
-const DEFAULT_WINDOW_POINTS = 4e3;
+const DEFAULT_WINDOW_POINTS = 480;
+const MIN_WINDOW_POINTS = 240;
+const MAX_WINDOW_POINTS = 15360;
 const SAMPLE_DT = POINT_DT / 2;
 const CH_SCALE = {
   abp: 300 / 2047,
@@ -458,6 +460,8 @@ export {
   DEFAULT_WINDOW_POINTS,
   DT,
   Experiment,
+  MAX_WINDOW_POINTS,
+  MIN_WINDOW_POINTS,
   MODEL_VERSION,
   POINT_DT,
   RECEPTOR_DT,

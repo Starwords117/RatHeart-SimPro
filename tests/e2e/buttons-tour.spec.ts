@@ -94,15 +94,15 @@ test('全按钮巡游:教师完整操作流程', async ({ page }) => {
   await page.click('#close-dialog');
 
   console.error('[T]', '设置后', performance.now().toFixed(0));
-  // 10. 显示窗口:×2 / ÷2 / 全部记录 / 恢复
+  // 10. 显示窗口:×2 / ÷2 / 全部记录 / 恢复(默认 3 s=480 样本)
   const sel = page.locator('#window-select');
   await page.click('#window-double');
-  await expect(sel).toHaveValue('8000');
+  await expect(sel).toHaveValue('960');
   await page.click('#window-half');
-  await expect(sel).toHaveValue('4000');
+  await expect(sel).toHaveValue('480');
   await sel.selectOption('0');
   await expect(sel).toHaveValue('0');
-  await sel.selectOption('4000');
+  await sel.selectOption('480');
 
   console.error('[T]', '窗口后', performance.now().toFixed(0));
   // 11. 导出:JSON / CSV / .rat / PNG 触发下载

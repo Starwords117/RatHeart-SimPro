@@ -16,8 +16,12 @@ export const MODEL_VERSION = 'ratheart-simpro-0.2.0'; // 模型移植自 RatCVS 
 /** 原版默认回放速度：TTimer.Interval=50ms → 20 显示点/s，
  *  每点 12.5 ms 生理时间 → 0.25 生理秒/实际秒。 */
 export const DEFAULT_SPEED = 0.25;
-/** 原版默认显示窗口（子样本数；每个显示点写 2 个子样本） */
-export const DEFAULT_WINDOW_POINTS = 4000;
+/** 显示窗口默认 3 s（子样本数；每显示点写 2 个子样本，160 子样本/s） */
+export const DEFAULT_WINDOW_POINTS = 480;
+/** 显示窗口下限 1.5 s */
+export const MIN_WINDOW_POINTS = 240;
+/** 显示窗口上限 96 s */
+export const MAX_WINDOW_POINTS = 15360;
 /** 子样本间隔（生理秒）：每显示点 2 个子样本 */
 export const SAMPLE_DT = POINT_DT / 2;
 /** 原版 ADC 标度：物理量 = ADC 值 × CH_SCALE */

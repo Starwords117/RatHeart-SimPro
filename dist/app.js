@@ -1,5 +1,5 @@
 import { DRUGS, NERVE_PATHWAYS, doseList } from "./catalog.js";
-import { MODEL_VERSION, DEFAULT_WINDOW_POINTS, CH_SCALE, SAMPLE_DT } from "./core.js";
+import { MODEL_VERSION, DEFAULT_WINDOW_POINTS, MIN_WINDOW_POINTS, MAX_WINDOW_POINTS, CH_SCALE, SAMPLE_DT } from "./core.js";
 const $ = (selector) => document.querySelector(selector);
 const worker = new Worker(new URL("./simulation.worker.js", import.meta.url), { type: "module" });
 const canvas = $("#trace-canvas");
@@ -22,7 +22,7 @@ const CHANNEL_LABELS = { abp: "ABP \u52A8\u8109\u8840\u538B mmHg", lvp: "LVP \u5
 const CHANNEL_KEYS = ["abp", "lvp", "vbp", "hf", "hr"];
 const CHANNEL_DEFAULT_MAX = { abp: 220, lvp: 220, vbp: 20, hf: 20, hr: 400 };
 const EVENT_COLORS = { dose: "#78818a", stimulus: "#8b7552", death: "#b03a2e", import: "#9aa4ad" };
-let currentRange = { start: 0, end: 4e3, left: 46, right: 12, top: 8, bottom: 30, width: 800, height: 420 };
+let currentRange = { start: 0, end: DEFAULT_WINDOW_POINTS, left: 46, right: 12, top: 8, bottom: 30, width: 800, height: 420 };
 function send(type, data = {}) {
   worker.postMessage({ type, ...data });
 }
@@ -610,7 +610,7 @@ $("#run-button").addEventListener("click", () => {
 $("#advance-button").addEventListener("click", () => send("advance", { seconds: 30 }));
 $("#speed-select").addEventListener("change", (event) => send("speed", { value: Number(event.target.value) }));
 function setWindow(points) {
-  windowPoints = points === 0 ? 0 : Math.max(500, points);
+  windowPoints = points === 0 ? 0 : Math.min(MAX_WINDOW_POINTS, Math.max(MIN_WINDOW_POINTS, points));
   const select = $("#window-select");
   if (windowPoints > 0) {
     const match = Array.from(select.options).find((o) => Number(o.value) === windowPoints);
