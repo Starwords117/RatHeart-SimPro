@@ -128,7 +128,7 @@ function createBroadcastServer({ root, port, openLan = true }) {
   }
 
   function handleFollow(res, room) {
-    const s = rooms.get(room);
+    const s0 = rooms.get(room);
     res.writeHead(200, {
       'Content-Type': 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-cache, no-transform',
@@ -136,12 +136,28 @@ function createBroadcastServer({ root, port, openLan = true }) {
       'X-Accel-Buffering': 'no'
     });
     res.write(`event: backfill\ndata: ${JSON.stringify({
-      seq: s?.seq ?? 0, state: s?.state ?? null,
-      frames: s?.frames ?? [], events: s?.events ?? []
+      seq: s0?.seq ?? 0, state: s0?.state ?? null,
+      frames: s0?.frames ?? [], events: s0?.events ?? []
     })}\n\n`);
+    let s = s0;
     if (s) s.followers.add(res);
-    const heartbeat = setInterval(() => res.write(': ping\n\n'), 15000);
-    res.on('close', () => { clearInterval(heartbeat); if (s) s.followers.delete(res); });
+    // 心跳 15s;房间迟到挂接:学生先于教师连接时每 2s 重试附着,
+    // 开课后补发 backfill,等待态学生无需刷新(与 Rust 版语义一致)
+    let tick = 0;
+    const timer = setInterval(() => {
+      if (!s) {
+        const found = rooms.get(room);
+        if (found) {
+          s = found;
+          s.followers.add(res);
+          res.write(`event: backfill\ndata: ${JSON.stringify({
+            seq: s.seq, state: s.state, frames: s.frames, events: s.events
+          })}\n\n`);
+        }
+      }
+      if (++tick % 8 === 0) res.write(': ping\n\n');
+    }, 2000);
+    res.on('close', () => { clearInterval(timer); if (s) s.followers.delete(res); });
   }
 
   const server = http.createServer(async (req, res) => {

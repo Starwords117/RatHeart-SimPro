@@ -258,7 +258,7 @@ function setPollInterval(ms) {
 }
 function sseHandle(m) {
   lastDataAt = Date.now();
-  if (m.type === "off") {
+  if (m.type === "off" || !m.state) {
     applyUpdate(true, { state: null, frames: [], events: [] });
     setStatus("\u8001\u5E08\u7AEF\u5C1A\u672A\u5F00\u59CB\u5E7F\u64AD\uFF0C\u7B49\u5F85\u4E2D\u2026", false);
     return;

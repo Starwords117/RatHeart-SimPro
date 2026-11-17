@@ -240,8 +240,9 @@ function setPollInterval(ms: number): void {
 
 function sseHandle(m: any): void {
   lastDataAt = Date.now();
-  if (m.type === 'off') {
-    // 教师停止广播:回到等待空态
+  if (m.type === 'off' || !m.state) {
+    // 教师停止广播,或房间尚不存在(空 backfill):回到等待空态
+    // (与轮询路径一致,此前 SSE 路径漏判空房间误报「实时跟随」)
     applyUpdate(true, { state: null, frames: [], events: [] });
     setStatus('老师端尚未开始广播，等待中…', false);
     return;

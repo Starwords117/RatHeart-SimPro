@@ -440,7 +440,8 @@ fn follow_stream(
             app,
             room,
             pending: Some(Event::default().event("backfill").data(backfill)),
-            heartbeat: Box::pin(tokio::time::sleep(Duration::from_secs(15))),
+            // 初始 2s:等待态学生的首次迟到挂接要快;连上后各分支自复位(15s 心跳)
+            heartbeat: Box::pin(tokio::time::sleep(Duration::from_secs(2))),
         },
         |mut st| async move {
             loop {
@@ -476,9 +477,30 @@ fn follow_stream(
                         }
                     }
                     None => {
+                        // 房间尚未建立(学生先于教师)或已被删除(教师重启广播):
+                        // 每 2s 尝试迟到挂接——附着成功即补发 backfill,学生无需刷新
                         (&mut st.heartbeat).await;
-                        st.heartbeat = Box::pin(tokio::time::sleep(Duration::from_secs(15)));
-                        return Some((Ok(Event::default().comment("ping")), st));
+                        st.heartbeat = Box::pin(tokio::time::sleep(Duration::from_secs(2)));
+                        let snap = {
+                            let rooms = st.app.rooms.lock().unwrap();
+                            rooms.get(&st.room).map(|s| {
+                                let rx = s.followers.subscribe();
+                                let backfill = json!({
+                                    "seq": s.seq,
+                                    "state": s.state,
+                                    "frames": s.frames,
+                                    "events": s.events
+                                });
+                                (rx, backfill.to_string())
+                            })
+                        };
+                        match snap {
+                            Some((rx, backfill)) => {
+                                st.rx = Some(rx);
+                                return Some((Ok(Event::default().event("backfill").data(backfill)), st));
+                            }
+                            None => return Some((Ok(Event::default().comment("ping")), st)),
+                        }
                     }
                 }
             }
