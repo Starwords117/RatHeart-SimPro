@@ -537,12 +537,47 @@ function roundFrame(f) {
   return { t: Math.round(f.t * 1e5) / 1e5, abp: Math.round(f.abp * 1e3) / 1e3, lvp: Math.round(f.lvp * 1e3) / 1e3, vbp: Math.round(f.vbp * 1e3) / 1e3, hf: Math.round(f.hf * 1e3) / 1e3, hr: Math.round(f.hr * 100) / 100 };
 }
 let lanInfo = null;
+let lastHintHtml = "";
+function renderHint(hint, html) {
+  if (lastHintHtml === html) return;
+  lastHintHtml = html;
+  hint.innerHTML = html;
+  hint.querySelector("#ip-toggle")?.addEventListener("click", () => {
+    hint.querySelector(".ip-alt")?.classList.toggle("hidden");
+  });
+  hint.querySelectorAll("code.copy-url").forEach((el) => {
+    el.addEventListener("click", () => void copyText(el.textContent ?? ""));
+  });
+}
+async function copyText(text) {
+  const okMsg = "\u5730\u5740\u5DF2\u590D\u5236,\u7C98\u8D34\u5230\u540C\u5B66\u6D4F\u89C8\u5668\u5373\u53EF";
+  try {
+    await navigator.clipboard.writeText(text);
+    toast(okMsg);
+    return;
+  } catch {
+  }
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.position = "fixed";
+  ta.style.opacity = "0";
+  document.body.appendChild(ta);
+  ta.select();
+  let ok = false;
+  try {
+    ok = document.execCommand("copy");
+  } catch {
+  }
+  ta.remove();
+  toast(ok ? okMsg : "\u81EA\u52A8\u590D\u5236\u5931\u8D25,\u8BF7\u624B\u52A8\u9009\u4E2D\u5730\u5740\u590D\u5236");
+}
 function updateBroadcastButton(followers, error = false) {
   const button = $("#broadcast-button");
   button.textContent = broadcasting ? error ? "\u5E7F\u64AD\u4E2D\u65AD\uFF08\u5DF2\u505C\u6B62\uFF09" : `\u505C\u6B62\u6388\u8BFE\u5E7F\u64AD \xB7 ${followers} \u4EBA\u8DDF\u968F` : "\u5F00\u59CB\u6388\u8BFE\u5E7F\u64AD";
   const hint = $("#broadcast-hint");
   if (!broadcasting || error) {
     hint.classList.add("hidden");
+    lastHintHtml = "";
     return;
   }
   hint.classList.remove("hidden");
@@ -558,13 +593,12 @@ function updateBroadcastButton(followers, error = false) {
     const info = lanInfo;
     const roomQS = broadcastRoom ? `?room=${broadcastRoom}` : "";
     const others = info.follow.filter((u) => u !== info.primaryFollow);
-    hint.innerHTML = `\u540C\u5B66\u6D4F\u89C8\u5668\u6253\u5F00:<code>${info.primaryFollow}${roomQS}</code>(\u540C\u4E00 Wi-Fi,\u5B9E\u65F6\u8DDF\u968F)` + (others.length ? ` <span class="ip-toggle" id="ip-toggle" title="\u5176\u4ED6\u53EF\u80FD\u7684\u5730\u5740">?</span><span class="ip-alt hidden">${others.map((u) => `<code>${u}${roomQS}</code>`).join("\u3001")}</span>` : "");
-    hint.querySelector("#ip-toggle")?.addEventListener("click", () => {
-      hint.querySelector(".ip-alt")?.classList.toggle("hidden");
-    });
+    const html = `\u540C\u5B66\u6D4F\u89C8\u5668\u6253\u5F00:<code class="copy-url" title="\u70B9\u51FB\u590D\u5236">${info.primaryFollow}${roomQS}</code>(\u540C\u4E00 Wi-Fi,\u5B9E\u65F6\u8DDF\u968F,\u70B9\u51FB\u5730\u5740\u53EF\u590D\u5236)` + (others.length ? ` <span class="ip-toggle" id="ip-toggle" title="\u5176\u4ED6\u53EF\u80FD\u7684\u5730\u5740">?</span><span class="ip-alt hidden">${others.map((u) => `<code class="copy-url" title="\u70B9\u51FB\u590D\u5236">${u}${roomQS}</code>`).join("\u3001")}</span>` : "");
+    renderHint(hint, html);
   } else {
     const roomQS = broadcastRoom ? `?room=${broadcastRoom}` : "";
-    hint.innerHTML = `\u540C\u5B66\u6D4F\u89C8\u5668\u6253\u5F00(\u591A\u9009\u4E00,\u4F18\u5148\u7B2C\u4E00\u4E2A):${lanInfo.follow.map((u) => `<code>${u}${roomQS}</code>`).join("\u3001")}(\u540C\u4E00 Wi-Fi,\u5B9E\u65F6\u8DDF\u968F)`;
+    const html = `\u540C\u5B66\u6D4F\u89C8\u5668\u6253\u5F00(\u591A\u9009\u4E00,\u4F18\u5148\u7B2C\u4E00\u4E2A):${lanInfo.follow.map((u) => `<code class="copy-url" title="\u70B9\u51FB\u590D\u5236">${u}${roomQS}</code>`).join("\u3001")}(\u540C\u4E00 Wi-Fi,\u5B9E\u65F6\u8DDF\u968F)`;
+    renderHint(hint, html);
   }
 }
 $("#drug-select").addEventListener("change", updateDrug);

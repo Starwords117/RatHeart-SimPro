@@ -557,13 +557,47 @@ function roundFrame(f: Frame): Frame {
 // 教学机局域网地址(/api/lan 由 serve.mjs 提供;Electron/file 模式为 null)
 let lanInfo: { lan: boolean; addresses: string[]; follow: string[]; primary?: string | null; primaryFollow?: string | null } | null = null;
 
+// 提示条只在内容变化时才重建 DOM——每秒推送会反复刷新此条,
+// 直接 innerHTML 重建会打断学生地址的文本选中(用户反馈)
+let lastHintHtml = '';
+function renderHint(hint: HTMLElement, html: string): void {
+  if (lastHintHtml === html) return;
+  lastHintHtml = html;
+  hint.innerHTML = html;
+  hint.querySelector('#ip-toggle')?.addEventListener('click', () => {
+    hint.querySelector('.ip-alt')?.classList.toggle('hidden');
+  });
+  hint.querySelectorAll('code.copy-url').forEach(el => {
+    el.addEventListener('click', () => void copyText(el.textContent ?? ''));
+  });
+}
+
+async function copyText(text: string): Promise<void> {
+  const okMsg = '地址已复制,粘贴到同学浏览器即可';
+  try {
+    await navigator.clipboard.writeText(text);
+    toast(okMsg);
+    return;
+  } catch { /* 剪贴板权限受限时走回退 */ }
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch { /* 忽略 */ }
+  ta.remove();
+  toast(ok ? okMsg : '自动复制失败,请手动选中地址复制');
+}
+
 function updateBroadcastButton(followers: number, error = false): void {
   const button = $<HTMLButtonElement>('#broadcast-button');
   button.textContent = broadcasting
     ? (error ? '广播中断（已停止）' : `停止授课广播 · ${followers} 人跟随`)
     : '开始授课广播';
   const hint = $('#broadcast-hint');
-  if (!broadcasting || error) { hint.classList.add('hidden'); return; }
+  if (!broadcasting || error) { hint.classList.add('hidden'); lastHintHtml = ''; return; }
   hint.classList.remove('hidden');
   if (!lanInfo) { hint.textContent = '正在获取局域网地址…'; return; }
   if (!lanInfo.lan || !lanInfo.follow.length) {
@@ -575,15 +609,14 @@ function updateBroadcastButton(followers: number, error = false): void {
     const info = lanInfo;
     const roomQS = broadcastRoom ? `?room=${broadcastRoom}` : '';
     const others = info.follow.filter(u => u !== info.primaryFollow);
-    hint.innerHTML = `同学浏览器打开:<code>${info.primaryFollow}${roomQS}</code>(同一 Wi-Fi,实时跟随)`
-      + (others.length ? ` <span class="ip-toggle" id="ip-toggle" title="其他可能的地址">?</span><span class="ip-alt hidden">${others.map(u => `<code>${u}${roomQS}</code>`).join('、')}</span>` : '');
-    hint.querySelector('#ip-toggle')?.addEventListener('click', () => {
-      hint.querySelector('.ip-alt')?.classList.toggle('hidden');
-    });
+    const html = `同学浏览器打开:<code class="copy-url" title="点击复制">${info.primaryFollow}${roomQS}</code>(同一 Wi-Fi,实时跟随,点击地址可复制)`
+      + (others.length ? ` <span class="ip-toggle" id="ip-toggle" title="其他可能的地址">?</span><span class="ip-alt hidden">${others.map(u => `<code class="copy-url" title="点击复制">${u}${roomQS}</code>`).join('、')}</span>` : '');
+    renderHint(hint, html);
   } else {
     // 探测失败(如教室无默认路由):多选一,优先第一个
     const roomQS = broadcastRoom ? `?room=${broadcastRoom}` : '';
-    hint.innerHTML = `同学浏览器打开(多选一,优先第一个):${lanInfo.follow.map(u => `<code>${u}${roomQS}</code>`).join('、')}(同一 Wi-Fi,实时跟随)`;
+    const html = `同学浏览器打开(多选一,优先第一个):${lanInfo.follow.map(u => `<code class="copy-url" title="点击复制">${u}${roomQS}</code>`).join('、')}(同一 Wi-Fi,实时跟随)`;
+    renderHint(hint, html);
   }
 }
 

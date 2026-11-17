@@ -35,6 +35,7 @@ async fn main() {
         port,
         host: host.to_string(),
         open_lan: lan,
+        embedded: None,
     };
     println!("RatHeart-SimPro 广播服务器:http://{host}:{port}(静态根 {})", config.root.display());
     if let Err(e) = ratheart_server::serve(config).await {

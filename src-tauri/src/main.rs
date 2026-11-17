@@ -13,7 +13,7 @@
 // ============================================================
 use base64::Engine;
 use std::sync::OnceLock;
-use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_dialog::DialogExt;
 
 /// 广播服务器共享状态:api_call 进程内通道与 TCP 服务器共用
@@ -29,14 +29,14 @@ fn find_free_port(start: u16) -> u16 {
     start
 }
 
-/// 广播服务器静态根:打包版取资源目录内 dist,开发版取仓库 dist
-fn dist_root(app: &tauri::AppHandle) -> std::path::PathBuf {
-    app.path()
-        .resource_dir()
-        .ok()
-        .map(|d| d.join("dist"))
-        .filter(|p| p.is_dir())
-        .unwrap_or_else(|| std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../dist"))
+/// 嵌入式前端资产解析:tauri codegen 把 frontendDist 编进二进制,
+/// 学生 follow.html 等静态文件直接从内嵌资产读取(磁盘路径在打包版不可靠)
+fn embedded_resolver(app: &tauri::AppHandle) -> ratheart_server::EmbeddedResolver {
+    let resolver = app.asset_resolver();
+    std::sync::Arc::new(move |rel: &std::path::Path| {
+        let rel = rel.to_str()?.to_string();
+        resolver.get(rel).map(|a| a.bytes().to_vec())
+    })
 }
 
 /// 导出桥:前端 download() 在 Tauri 环境改走此命令(b64 编码),
@@ -90,10 +90,11 @@ fn main() {
             let port = find_free_port(5189);
             let handle = app.handle().clone();
             let config = ratheart_server::ServerConfig {
-                root: dist_root(&handle),
+                root: std::path::PathBuf::new(), // 桌面版静态文件走内嵌资产,root 不用
                 port,
                 host: "0.0.0.0".to_string(),
                 open_lan: true,
+                embedded: Some(embedded_resolver(&handle)),
             };
             // 状态先入 OnceLock(页面 IPC 通道立即可用),再起学生用的 TCP 服务器
             let state = ratheart_server::build_state(config);

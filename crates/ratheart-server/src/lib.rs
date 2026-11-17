@@ -39,11 +39,16 @@ const BODY_LIMIT: usize = 8_000_000; // 对应 CJS 8e6 断连阈值(CJS 166/172)
 /// SSE 通道消息:(事件名, data 文本)。backfill/chunk 两类。
 type SseMsg = (&'static str, String);
 
+/// 嵌入式资产解析器:打包桌面版前端资产已嵌入二进制(tauri codegen),
+/// 静态服务优先经此读取,不依赖磁盘路径;web CLI 用磁盘 root
+pub type EmbeddedResolver = Arc<dyn Fn(&Path) -> Option<Vec<u8>> + Send + Sync>;
+
 pub struct ServerConfig {
     pub root: PathBuf,
     pub port: u16,
     pub host: String, // "127.0.0.1" 或 "0.0.0.0"(局域网授课)
     pub open_lan: bool,
+    pub embedded: Option<EmbeddedResolver>,
 }
 
 struct Room {
@@ -602,11 +607,30 @@ async fn lan(State(app): State<AppState>) -> Response {
 }
 
 // ---- 静态文件(CJS 242-254):学生浏览器靠它拉 follow.html ----
+// 桌面版:前端资产嵌入二进制,经 embedded 解析(路径猜测在真机上不可靠);
+// web CLI:读磁盘 root
 async fn static_file(State(app): State<AppState>, uri: Uri) -> Response {
     let decoded = percent_decode_str(uri.path())
         .decode_utf8_lossy()
         .to_string();
     let relative = safe_relative(&decoded);
+    let relative_path = Path::new(&relative);
+    if let Some(resolve) = &app.config.embedded {
+        if let Some(body) = resolve(relative_path) {
+            let mut res = (
+                StatusCode::OK,
+                [(header::CONTENT_TYPE, mime_for(relative_path))],
+                body,
+            )
+                .into_response();
+            if relative.ends_with("sw.js") {
+                res.headers_mut()
+                    .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"));
+            }
+            return res;
+        }
+        return text_res(StatusCode::NOT_FOUND, "Not found");
+    }
     let root: &Path = &app.config.root;
     let file = if relative.is_empty() {
         root.join("index.html")
