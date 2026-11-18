@@ -369,6 +369,20 @@ function drawChart(): void {
     context.lineWidth = 1.4;
     context.beginPath(); context.moveTo(x, top); context.lineTo(x, top + plotH); context.stroke();
   }
+  // 区域框选:拖拽预览 / 已选区间半透明高亮 + 边界虚线
+  const reg = dragRegion ?? (regionStats ? { t0: regionStats.t0, t1: regionStats.t1 } : null);
+  if (reg) {
+    const xa = xAt(Math.max(reg.t0, t0)), xb = xAt(Math.min(reg.t1, t1));
+    if (xb > xa) {
+      context.fillStyle = 'rgba(46,134,193,0.14)';
+      context.fillRect(xa, top, xb - xa, plotH);
+      context.strokeStyle = '#2E86C1';
+      context.lineWidth = 1.2;
+      context.setLineDash([4, 3]);
+      for (const xx of [xa, xb]) { context.beginPath(); context.moveTo(xx, top); context.lineTo(xx, top + plotH); context.stroke(); }
+      context.setLineDash([]);
+    }
+  }
 }
 
 function animate(): void { if (dirty) { drawChart(); dirty = false; } requestAnimationFrame(animate); }
@@ -424,6 +438,70 @@ function readoutText(frame: Frame): string {
 }
 
 const tooltip = $('#cursor-tooltip');
+
+// ---- 区域框选统计:按住拖动画出时间范围,输出五通道区间平均值 ----
+let dragAnchor: { x: number; t: number } | null = null;
+let dragRegion: { t0: number; t1: number } | null = null;
+let regionStats: { t0: number; t1: number; n: number; avg: Frame } | null = null;
+
+function frameIndexAt(t: number): number {
+  let lo = 0, hi = frames.length;
+  while (lo < hi) { const mid = (lo + hi) >> 1; if (frames[mid].t < t) lo = mid + 1; else hi = mid; }
+  return lo;
+}
+function hideRegionTip(): void { document.getElementById('region-tooltip')?.classList.add('hidden'); }
+function clearRegion(): void { regionStats = null; hideRegionTip(); dirty = true; }
+function showRegionTip(): void {
+  if (!regionStats) return;
+  let el = document.getElementById('region-tooltip');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'region-tooltip';
+    $('#plot-wrap').appendChild(el);
+  }
+  const a = regionStats.avg;
+  el.innerHTML = `
+    <div class="rt-title">区间均值 ${regionStats.t0.toFixed(2)}–${regionStats.t1.toFixed(2)} s(n=${regionStats.n})</div>
+    <div class="rt-row"><i style="background:#b03a2e"></i>ABP ${a.abp.toFixed(1)} mmHg</div>
+    <div class="rt-row"><i style="background:#245e9c"></i>LVP ${a.lvp.toFixed(1)} mmHg</div>
+    <div class="rt-row"><i style="background:#2e8b74"></i>VBP ${a.vbp.toFixed(1)} mmHg</div>
+    <div class="rt-row"><i style="background:#b06f2e"></i>HF ${a.hf.toFixed(1)}</div>
+    <div class="rt-row"><i style="background:#3a7d44"></i>HR ${a.hr.toFixed(0)} bpm</div>
+    <div class="rt-actions"><button data-act="copy" type="button">复制</button><button data-act="work" type="button">加入工作表</button></div>`;
+  el.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+    const s = regionStats;
+    if (!s) return;
+    if ((b as HTMLElement).dataset.act === 'copy') {
+      const text = `区间 ${s.t0.toFixed(2)}–${s.t1.toFixed(2)} s(n=${s.n})\nABP ${s.avg.abp.toFixed(1)} mmHg\nLVP ${s.avg.lvp.toFixed(1)} mmHg\nVBP ${s.avg.vbp.toFixed(1)} mmHg\nHF ${s.avg.hf.toFixed(1)}\nHR ${s.avg.hr.toFixed(0)} bpm`;
+      navigator.clipboard?.writeText(text).then(() => toast('区间均值已复制')).catch(() => toast('复制失败,请手动选择文本'));
+    } else {
+      workRows.push({ t: (s.t0 + s.t1) / 2, abp: s.avg.abp, lvp: s.avg.lvp, vbp: s.avg.vbp, hf: s.avg.hf, hr: s.avg.hr });
+      const body = document.querySelector('#work-body');
+      if (body) body.innerHTML = workRows.map((r, i) => `<tr><td>${i + 1}</td><td class="num">${r.t.toFixed(2)}</td><td class="num">${r.abp.toFixed(1)}</td><td class="num">${r.lvp.toFixed(1)}</td><td class="num">${r.vbp.toFixed(1)}</td><td class="num">${r.hf.toFixed(1)}</td><td class="num">${r.hr.toFixed(0)}</td></tr>`).join('');
+      toast('区间均值已加入工作表');
+    }
+  }));
+  // 定位:选区中心上方,水平夹在画布内
+  const rect = canvas.getBoundingClientRect();
+  const { start, end, left, right, width } = currentRange;
+  const tA = frames[start]?.t ?? 0, tB = frames[Math.min(end, frames.length) - 1]?.t ?? 1;
+  const xMid = tB > tA ? left + ((regionStats.t1 - tA) / (tB - tA)) * (width - left - right) : rect.width / 2;
+  el.style.left = `${Math.max(8, Math.min(xMid - 115, rect.width - 238))}px`;
+  el.style.top = `42px`;
+  el.classList.remove('hidden');
+}
+function computeRegion(t0: number, t1: number): void {
+  const a = Math.min(t0, t1), b = Math.max(t0, t1);
+  const i0 = frameIndexAt(a), i1 = Math.min(frames.length, frameIndexAt(b));
+  const n = i1 - i0;
+  if (n < 2) { toast('选区太小,无法统计均值'); return; }
+  const sum = { abp: 0, lvp: 0, vbp: 0, hf: 0, hr: 0 };
+  for (let i = i0; i < i1; i++) { const f = frames[i]; sum.abp += f.abp; sum.lvp += f.lvp; sum.vbp += f.vbp; sum.hf += f.hf; sum.hr += f.hr; }
+  regionStats = { t0: a, t1: b, n, avg: { t: a, abp: sum.abp / n, lvp: sum.lvp / n, vbp: sum.vbp / n, hf: sum.hf / n, hr: sum.hr / n } };
+  showRegionTip();
+  dirty = true;
+}
+
 function pointerT(event: PointerEvent): number | null {
   const rect = canvas.getBoundingClientRect();
   const x = event.clientX - rect.left;
@@ -438,6 +516,16 @@ canvas.addEventListener('pointermove', (event) => {
   if (!frames.length) return;
   const t = pointerT(event);
   hoverTime = t;
+  // 拖拽框选中:实时更新预览范围,隐藏单点悬浮读数
+  if (dragAnchor) {
+    const rect = canvas.getBoundingClientRect();
+    if (Math.abs(event.clientX - rect.left - dragAnchor.x) > 5) {
+      if (t !== null) dragRegion = { t0: Math.min(dragAnchor.t, t), t1: Math.max(dragAnchor.t, t) };
+      tooltip.classList.add('hidden');
+      dirty = true;
+      return;
+    }
+  }
   if (t === null) { tooltip.classList.add('hidden'); dirty = true; return; }
   const rect = canvas.getBoundingClientRect();
   const frame = frameAtTime(t);
@@ -450,11 +538,34 @@ canvas.addEventListener('pointermove', (event) => {
   dirty = true;
 });
 canvas.addEventListener('pointerdown', (event) => {
+  if (event.button !== 0) return;
   const t = pointerT(event);
-  if (t !== null) { cursorTime = t; const frame = frameAtTime(t); if (frame) $('#cursor-readout').textContent = readoutText(frame); }
+  if (t === null) { dragAnchor = null; return; }
+  // 记录锚点:移动超过 5px 即框选,否则抬起时按单点光标处理
+  dragAnchor = { x: event.clientX - canvas.getBoundingClientRect().left, t };
+  canvas.setPointerCapture(event.pointerId);
   dirty = true;
 });
-canvas.addEventListener('pointerleave', () => { hoverTime = null; tooltip.classList.add('hidden'); dirty = true; });
+canvas.addEventListener('pointerup', (event) => {
+  if (dragAnchor) {
+    if (dragRegion) {
+      computeRegion(dragRegion.t0, dragRegion.t1);   // 框选结束:统计区间均值
+      cursorTime = null;
+    } else {
+      clearRegion();                                  // 单击:清除选区,保留绿色光标行为
+      const t = pointerT(event);
+      if (t !== null) { cursorTime = t; const frame = frameAtTime(t); if (frame) $('#cursor-readout').textContent = readoutText(frame); }
+    }
+  }
+  dragAnchor = null;
+  dragRegion = null;
+  dirty = true;
+});
+canvas.addEventListener('pointercancel', () => { dragAnchor = null; dragRegion = null; });
+canvas.addEventListener('pointerleave', () => { hoverTime = null; if (!dragRegion) tooltip.classList.add('hidden'); dirty = true; });
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && regionStats) clearRegion();
+});
 
 // ---------------- Worker 消息 ----------------
 
@@ -466,7 +577,7 @@ worker.onmessage = (event: MessageEvent) => {
       (globalThis as any).__simTime = state.time;      // 调试标定用
       (globalThis as any).__simSpeed = state.speed;
       activeDrugs = m.activeDrugs;
-      if (m.replace) { frames = m.frames; events = m.events; historyEnd = null; cursorTime = null; }
+      if (m.replace) { frames = m.frames; events = m.events; historyEnd = null; cursorTime = null; clearRegion(); }
       else { frames.push(...m.frames); events.push(...m.events); }
       renderState();
       if (m.frames.length || m.events.length || m.replace) renderEvents();

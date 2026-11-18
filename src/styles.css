@@ -343,3 +343,12 @@ dialog::backdrop { background: #0006; }
 .work-table th, .work-table td { border: 1px solid #cdd2d7; padding: 5px 8px; text-align: center; font-family: Consolas, "Microsoft YaHei", monospace; }
 .work-table th { background: #f6f7f8; }
 .work-table td.num { text-align: right; }
+/* ===== 区域框选均值面板 ===== */
+#region-tooltip { position: absolute; z-index: 12; min-width: 216px; padding: 10px 12px; background: #fff; border: 1.4px solid #2e86c1; box-shadow: 0 6px 18px rgba(20,40,60,.18); font-size: 12px; color: #202428; pointer-events: auto; }
+#region-tooltip.hidden { display: none; }
+#region-tooltip .rt-title { font-weight: 700; color: #1a5276; margin-bottom: 6px; }
+#region-tooltip .rt-row { display: flex; align-items: center; gap: 6px; line-height: 1.8; }
+#region-tooltip .rt-row i { display: inline-block; width: 14px; height: 3px; }
+#region-tooltip .rt-actions { display: flex; gap: 8px; margin-top: 8px; }
+#region-tooltip .rt-actions button { flex: 1; min-height: 26px; font-size: 12px; border: 1px solid #aeb6be; background: #fff; color: #202428; cursor: pointer; }
+#region-tooltip .rt-actions button:hover { background: #edf3f8; }
