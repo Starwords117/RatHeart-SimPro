@@ -75,7 +75,7 @@ test('全按钮巡游:教师完整操作流程', async ({ page }) => {
   await page.click('#work-add');
   await expect(page.locator('#work-body tr')).toHaveCount(2);
   await page.click('#work-clear');
-  await expect(page.locator('#work-body tr')).toHaveCount(0);
+  await expect(page.locator('#work-body')).toContainText('暂无记录');
   await page.click('#close-dialog');
   await expect(page.locator('#information-dialog')).toBeHidden();
 
