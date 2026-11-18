@@ -476,8 +476,7 @@ function showRegionTip(): void {
       navigator.clipboard?.writeText(text).then(() => toast('区间均值已复制')).catch(() => toast('复制失败,请手动选择文本'));
     } else {
       workRows.push({ t: (s.t0 + s.t1) / 2, abp: s.avg.abp, lvp: s.avg.lvp, vbp: s.avg.vbp, hf: s.avg.hf, hr: s.avg.hr });
-      const body = document.querySelector('#work-body');
-      if (body) body.innerHTML = workRows.map((r, i) => `<tr><td>${i + 1}</td><td class="num">${r.t.toFixed(2)}</td><td class="num">${r.abp.toFixed(1)}</td><td class="num">${r.lvp.toFixed(1)}</td><td class="num">${r.vbp.toFixed(1)}</td><td class="num">${r.hf.toFixed(1)}</td><td class="num">${r.hr.toFixed(0)}</td></tr>`).join('');
+      renderWorkRows();
       toast('区间均值已加入工作表');
     }
   }));
@@ -1046,29 +1045,35 @@ $('#dose-tool-button')?.addEventListener('click', () => {
 
 // ---- 测量工作表:光标取数 → 表格 → CSV ----
 let workRows: { t: number; abp: number; lvp: number; vbp: number; hf: number; hr: number }[] = [];
-function renderWorksheet(): void {
-  const table = workRows.map((r, i) => `<tr><td>${i + 1}</td><td class="num">${r.t.toFixed(2)}</td><td class="num">${r.abp.toFixed(1)}</td><td class="num">${r.lvp.toFixed(1)}</td><td class="num">${r.vbp.toFixed(1)}</td><td class="num">${r.hf.toFixed(1)}</td><td class="num">${r.hr.toFixed(0)}</td></tr>`).join('');
-  return void table; // 由打开对话框的函数拼装
+function workRowHtml(r: { t: number; abp: number; lvp: number; vbp: number; hf: number; hr: number }, i: number): string {
+  return `<tr><td>${i + 1}</td><td class="num">${r.t.toFixed(2)}</td><td class="num">${r.abp.toFixed(1)}</td><td class="num">${r.lvp.toFixed(1)}</td><td class="num">${r.vbp.toFixed(1)}</td><td class="num">${r.hf.toFixed(1)}</td><td class="num">${r.hr.toFixed(0)}</td><td class="del-cell"><button class="work-del" data-i="${i}" aria-label="删除第 ${i + 1} 行" title="删除此行">×</button></td></tr>`;
+}
+function renderWorkRows(): void {
+  const body = document.querySelector<HTMLTableSectionElement>('#work-body');
+  if (!body) return;
+  body.innerHTML = workRows.map(workRowHtml).join('') || '<tr><td colspan="8">暂无记录</td></tr>';
+  body.querySelectorAll('button.work-del').forEach(b => b.addEventListener('click', () => {
+    workRows.splice(Number((b as HTMLElement).dataset.i), 1);
+    renderWorkRows();
+  }));
 }
 $('#worksheet-button')?.addEventListener('click', () => {
   openDialog('测量工作表', `
-    <p>点击曲线放置绿色光标,再点「加入光标读数」逐行记录;导出 CSV 交作业或作图。</p>
-    <table class="work-table"><thead><tr><th>#</th><th>时间 s</th><th>ABP</th><th>LVP</th><th>VBP</th><th>HF</th><th>HR</th></tr></thead><tbody id="work-body">${workRows.map((r, i) => `<tr><td>${i + 1}</td><td class="num">${r.t.toFixed(2)}</td><td class="num">${r.abp.toFixed(1)}</td><td class="num">${r.lvp.toFixed(1)}</td><td class="num">${r.vbp.toFixed(1)}</td><td class="num">${r.hf.toFixed(1)}</td><td class="num">${r.hr.toFixed(0)}</td></tr>`).join('') || '<tr><td colspan="7">暂无记录</td></tr>'}</tbody></table>
+    <p>点击曲线放置绿色光标,再点「加入光标读数」逐行记录;点行尾 × 删除单行;导出 CSV 交作业或作图。</p>
+    <table class="work-table"><thead><tr><th>#</th><th>时间 s</th><th>ABP</th><th>LVP</th><th>VBP</th><th>HF</th><th>HR</th><th style="width:36px"></th></tr></thead><tbody id="work-body">${workRows.map(workRowHtml).join('') || '<tr><td colspan="8">暂无记录</td></tr>'}</tbody></table>
     <div style="display:flex;gap:10px;margin-top:12px">
       <button id="work-add" class="button secondary" type="button">加入光标读数</button>
       <button id="work-clear" class="button ghost" type="button">清空</button>
       <button id="work-csv" class="button primary" type="button">导出 CSV</button>
     </div>`);
-  const refresh = () => {
-    document.querySelector<HTMLTableSectionElement>('#work-body')!.innerHTML = workRows.map((r, i) => `<tr><td>${i + 1}</td><td class="num">${r.t.toFixed(2)}</td><td class="num">${r.abp.toFixed(1)}</td><td class="num">${r.lvp.toFixed(1)}</td><td class="num">${r.vbp.toFixed(1)}</td><td class="num">${r.hf.toFixed(1)}</td><td class="num">${r.hr.toFixed(0)}</td></tr>`).join('');
-  };
+  renderWorkRows();
   document.querySelector<HTMLButtonElement>('#work-add')?.addEventListener('click', () => {
     const t = cursorTime ?? frames.at(-1)?.t;
     if (t === undefined) { toast('请先点击曲线放置测量光标'); return; }
     const f = frameAtTime(t);
-    if (f) { workRows.push(f); refresh(); }
+    if (f) { workRows.push(f); renderWorkRows(); }
   });
-  document.querySelector<HTMLButtonElement>('#work-clear')?.addEventListener('click', () => { workRows = []; refresh(); });
+  document.querySelector<HTMLButtonElement>('#work-clear')?.addEventListener('click', () => { workRows = []; renderWorkRows(); });
   document.querySelector<HTMLButtonElement>('#work-csv')?.addEventListener('click', () => {
     if (!workRows.length) { toast('工作表为空'); return; }
     const csv = ['序号,时间_s,ABP_mmHg,LVP_mmHg,VBP_mmHg,HF,HR_bpm',

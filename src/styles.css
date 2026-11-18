@@ -352,3 +352,7 @@ dialog::backdrop { background: #0006; }
 #region-tooltip .rt-actions { display: flex; gap: 8px; margin-top: 8px; }
 #region-tooltip .rt-actions button { flex: 1; min-height: 26px; font-size: 12px; border: 1px solid #aeb6be; background: #fff; color: #202428; cursor: pointer; }
 #region-tooltip .rt-actions button:hover { background: #edf3f8; }
+/* 工作表单行删除按钮 */
+.work-table .del-cell { text-align: center; }
+.work-table button.work-del { width: 22px; height: 22px; padding: 0; border: 1px solid #b8bfc6; background: #fff; color: #7a828a; font-size: 14px; line-height: 1; cursor: pointer; border-radius: 2px; }
+.work-table button.work-del:hover { background: #fdecea; border-color: #d64541; color: #d64541; }

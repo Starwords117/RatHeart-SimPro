@@ -460,8 +460,7 @@ HR ${s.avg.hr.toFixed(0)} bpm`;
       navigator.clipboard?.writeText(text).then(() => toast("\u533A\u95F4\u5747\u503C\u5DF2\u590D\u5236")).catch(() => toast("\u590D\u5236\u5931\u8D25,\u8BF7\u624B\u52A8\u9009\u62E9\u6587\u672C"));
     } else {
       workRows.push({ t: (s.t0 + s.t1) / 2, abp: s.avg.abp, lvp: s.avg.lvp, vbp: s.avg.vbp, hf: s.avg.hf, hr: s.avg.hr });
-      const body = document.querySelector("#work-body");
-      if (body) body.innerHTML = workRows.map((r, i) => `<tr><td>${i + 1}</td><td class="num">${r.t.toFixed(2)}</td><td class="num">${r.abp.toFixed(1)}</td><td class="num">${r.lvp.toFixed(1)}</td><td class="num">${r.vbp.toFixed(1)}</td><td class="num">${r.hf.toFixed(1)}</td><td class="num">${r.hr.toFixed(0)}</td></tr>`).join("");
+      renderWorkRows();
       toast("\u533A\u95F4\u5747\u503C\u5DF2\u52A0\u5165\u5DE5\u4F5C\u8868");
     }
   }));
@@ -1048,22 +1047,28 @@ $("#dose-tool-button")?.addEventListener("click", () => {
   });
 });
 let workRows = [];
-function renderWorksheet() {
-  const table = workRows.map((r, i) => `<tr><td>${i + 1}</td><td class="num">${r.t.toFixed(2)}</td><td class="num">${r.abp.toFixed(1)}</td><td class="num">${r.lvp.toFixed(1)}</td><td class="num">${r.vbp.toFixed(1)}</td><td class="num">${r.hf.toFixed(1)}</td><td class="num">${r.hr.toFixed(0)}</td></tr>`).join("");
-  return void table;
+function workRowHtml(r, i) {
+  return `<tr><td>${i + 1}</td><td class="num">${r.t.toFixed(2)}</td><td class="num">${r.abp.toFixed(1)}</td><td class="num">${r.lvp.toFixed(1)}</td><td class="num">${r.vbp.toFixed(1)}</td><td class="num">${r.hf.toFixed(1)}</td><td class="num">${r.hr.toFixed(0)}</td><td class="del-cell"><button class="work-del" data-i="${i}" aria-label="\u5220\u9664\u7B2C ${i + 1} \u884C" title="\u5220\u9664\u6B64\u884C">\xD7</button></td></tr>`;
+}
+function renderWorkRows() {
+  const body = document.querySelector("#work-body");
+  if (!body) return;
+  body.innerHTML = workRows.map(workRowHtml).join("") || '<tr><td colspan="8">\u6682\u65E0\u8BB0\u5F55</td></tr>';
+  body.querySelectorAll("button.work-del").forEach((b) => b.addEventListener("click", () => {
+    workRows.splice(Number(b.dataset.i), 1);
+    renderWorkRows();
+  }));
 }
 $("#worksheet-button")?.addEventListener("click", () => {
   openDialog("\u6D4B\u91CF\u5DE5\u4F5C\u8868", `
-    <p>\u70B9\u51FB\u66F2\u7EBF\u653E\u7F6E\u7EFF\u8272\u5149\u6807,\u518D\u70B9\u300C\u52A0\u5165\u5149\u6807\u8BFB\u6570\u300D\u9010\u884C\u8BB0\u5F55;\u5BFC\u51FA CSV \u4EA4\u4F5C\u4E1A\u6216\u4F5C\u56FE\u3002</p>
-    <table class="work-table"><thead><tr><th>#</th><th>\u65F6\u95F4 s</th><th>ABP</th><th>LVP</th><th>VBP</th><th>HF</th><th>HR</th></tr></thead><tbody id="work-body">${workRows.map((r, i) => `<tr><td>${i + 1}</td><td class="num">${r.t.toFixed(2)}</td><td class="num">${r.abp.toFixed(1)}</td><td class="num">${r.lvp.toFixed(1)}</td><td class="num">${r.vbp.toFixed(1)}</td><td class="num">${r.hf.toFixed(1)}</td><td class="num">${r.hr.toFixed(0)}</td></tr>`).join("") || '<tr><td colspan="7">\u6682\u65E0\u8BB0\u5F55</td></tr>'}</tbody></table>
+    <p>\u70B9\u51FB\u66F2\u7EBF\u653E\u7F6E\u7EFF\u8272\u5149\u6807,\u518D\u70B9\u300C\u52A0\u5165\u5149\u6807\u8BFB\u6570\u300D\u9010\u884C\u8BB0\u5F55;\u70B9\u884C\u5C3E \xD7 \u5220\u9664\u5355\u884C;\u5BFC\u51FA CSV \u4EA4\u4F5C\u4E1A\u6216\u4F5C\u56FE\u3002</p>
+    <table class="work-table"><thead><tr><th>#</th><th>\u65F6\u95F4 s</th><th>ABP</th><th>LVP</th><th>VBP</th><th>HF</th><th>HR</th><th style="width:36px"></th></tr></thead><tbody id="work-body">${workRows.map(workRowHtml).join("") || '<tr><td colspan="8">\u6682\u65E0\u8BB0\u5F55</td></tr>'}</tbody></table>
     <div style="display:flex;gap:10px;margin-top:12px">
       <button id="work-add" class="button secondary" type="button">\u52A0\u5165\u5149\u6807\u8BFB\u6570</button>
       <button id="work-clear" class="button ghost" type="button">\u6E05\u7A7A</button>
       <button id="work-csv" class="button primary" type="button">\u5BFC\u51FA CSV</button>
     </div>`);
-  const refresh = () => {
-    document.querySelector("#work-body").innerHTML = workRows.map((r, i) => `<tr><td>${i + 1}</td><td class="num">${r.t.toFixed(2)}</td><td class="num">${r.abp.toFixed(1)}</td><td class="num">${r.lvp.toFixed(1)}</td><td class="num">${r.vbp.toFixed(1)}</td><td class="num">${r.hf.toFixed(1)}</td><td class="num">${r.hr.toFixed(0)}</td></tr>`).join("");
-  };
+  renderWorkRows();
   document.querySelector("#work-add")?.addEventListener("click", () => {
     const t = cursorTime ?? frames.at(-1)?.t;
     if (t === void 0) {
@@ -1073,12 +1078,12 @@ $("#worksheet-button")?.addEventListener("click", () => {
     const f = frameAtTime(t);
     if (f) {
       workRows.push(f);
-      refresh();
+      renderWorkRows();
     }
   });
   document.querySelector("#work-clear")?.addEventListener("click", () => {
     workRows = [];
-    refresh();
+    renderWorkRows();
   });
   document.querySelector("#work-csv")?.addEventListener("click", () => {
     if (!workRows.length) {
