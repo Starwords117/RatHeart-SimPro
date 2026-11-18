@@ -144,7 +144,7 @@ button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-v
 .apparatus .flow { stroke-dasharray: 5 4; opacity: 0; }
 .apparatus.washing .flow { opacity: 1; animation: flow 1s linear 3; }
 .apparatus-caption { margin: 5px 0 0; color: #606970; font-size: 12px; line-height: 1.6; text-align: center; }
-.event-list { height: 194px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #b8bfc6 #f5f6f7; }
+.event-list { height: 170px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #b8bfc6 #f5f6f7; }
 .event-item { display: grid; grid-template-columns: 51px minmax(0, 1fr); align-items: start; gap: 9px; padding: 8px 0; border-bottom: 1px solid #e7eaed; }
 .event-item:last-child { border-bottom: 0; }
 .event-time { color: #68727a; font-size: 12px; line-height: 1.6; font-family: Consolas, monospace; }
@@ -303,7 +303,7 @@ dialog::backdrop { background: #0006; }
 .nerve-option input { accent-color: var(--accent); width: 15px; height: 15px; }
 #nerve-radios { margin-bottom: 10px; }
 .prep-wrap { display: flex; justify-content: center; background: #fff; border: 1px solid #cdd2d7; padding: 8px; margin-bottom: 10px; }
-.prep-wrap img { max-width: 100%; height: auto; }
+.prep-wrap img { max-width: 100%; height: auto; max-height: 280px; width: auto; }
 .legend-line { display: inline-block; width: 18px; height: 3px; margin-right: 5px; vertical-align: middle; }
 .chart-bottom span { color: #525c65; }
 .drug-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
@@ -314,7 +314,7 @@ dialog::backdrop { background: #0006; }
    其余区域尺寸不变;1160/900/740/520 响应式断点不受影响 */
 @media (min-width: 1900px) {
   .page { max-width: 1840px; }
-  .plot-wrap { height: 640px; }
+  .plot-wrap { height: 760px; }
 }
 .broadcast-hint { margin: 6px 16px 0; color: var(--accent); font-size: 12px; line-height: 1.7; user-select: all; }
 .broadcast-hint code { font-family: Consolas, monospace; }
